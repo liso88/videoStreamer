@@ -1,7 +1,7 @@
-================================================================================
+
     RASPBERRY PI ZERO 2W - CONVERTITORE VIDEO ANALOGICO → CAMERA IP
     Guida Completa di Installazione e Configurazione
-================================================================================
+
 
 INDICE
 ------
