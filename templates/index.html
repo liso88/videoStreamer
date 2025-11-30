@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi Stream Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .header-subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        .config-info-box {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: #eef2ff;
+            border-left: 4px solid #4f46e5;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #374151;
+        }
+        .btn-logout {
+            padding: 8px 16px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-logout:hover {
+            background: #dc2626;
+        }
+        .btn-settings {
+            padding: 8px 16px;
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .btn-settings:hover {
+            background: #7c3aed;
+        }
+        .system-info {
+            display: flex;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .source-selector {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .source-selector label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #333;
+        }
+        .radio-group {
+            display: flex;
+            gap: 20px;
+        }
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .radio-option input[type="radio"] {
+            width: auto;
+        }
+        .video-upload-section {
+            background: #f0f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 2px dashed #667eea;
+        }
+        .video-list {
+            margin-top: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .video-item {
+            padding: 8px;
+            background: white;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .info-card {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 8px;
+            flex: 1;
+        }
+        .info-card label {
+            font-size: 12px;
+            color: #666;
+            display: block;
+        }
+        .info-card .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stream-section {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        .stream-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-running { background: #10b981; color: white; }
+        .status-stopped { background: #ef4444; color: white; }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-start {
+            background: #10b981;
+            color: white;
+        }
+        .btn-start:hover { background: #059669; }
+        .btn-stop {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-stop:hover { background: #dc2626; }
+        .btn-save {
+            background: #667eea;
+            color: white;
+        }
+        .btn-save:hover { background: #5568d3; }
+        .stream-preview {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stream-url {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+            display: none;
+        }
+        .notification.success { background: #10b981; }
+        .notification.error { background: #ef4444; }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+        }
+        .modal-header h2 {
+            color: #333;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="notification" id="notification"></div>
+
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <div>
+                    <h1>🎥 Raspberry Pi Stream Manager</h1>
+                    <p class="header-subtitle">Gestisci i tuoi stream video in modo semplice</p>
+                </div>
+                <div>
+                    <a href="#" class="btn-settings" onclick="openSettingsModal(); return false;">⚙️ Impostazioni</a>
+                    <a href="/logout" class="btn-logout">🚪 Esci</a>
+                </div>
+            </div>
+
+            <!-- INFO: la pagina carica la configurazione corrente -->
+            <div class="config-info-box" id="config-info">
+                Tommaso v1.20251130.
+            </div>
+
+            <div class="system-info">
+                <div class="info-card">
+                    <label>CPU</label>
+                    <div class="value" id="cpu">--</div>
+                </div>
+                <div class="info-card">
+                    <label>Memoria</label>
+                    <div class="value" id="memory">--</div>
+                </div>
+                <div class="info-card">
+                    <label>Temperatura</label>
+                    <div class="value" id="temp">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MJPG Streamer Section -->
+        <div class="stream-section">
+            <h2>
+                MJPG Streamer
+                <span class="status-badge" id="mjpg-status">Fermo</span>
+            </h2>
+
+            <div class="source-selector">
+                <label>🎬 Sorgente Video</label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="mjpg-source-device" name="mjpg-source" value="device" checked>
+                        <label for="mjpg-source-device">📹 Dispositivo USB</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="mjpg-source-video" name="mjpg-source" value="video">
+                        <label for="mjpg-source-video">🎥 File Video (Loop)</label>
+                    </div>
+                </div>
+            </div>
+
+            <form id="mjpg-form">
+                <div class="form-row">
+                    <div class="form-group" id="mjpg-device-group">
+                        <label>Dispositivo Video</label>
+                        <select name="device" id="mjpg-device">
+                            {% for device in devices %}
+                            <option value="{{ device }}">{{ device }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" id="mjpg-video-group" style="display:none;">
+                        <label>File Video</label>
+                        <select name="video_file" id="mjpg-video-file">
+                            <option value="">Carica un video...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Risoluzione</label>
+                        <select name="resolution">
+                            <option value="320x240">320x240</option>
+                            <option value="640x480" selected>640x480</option>
+                            <option value="800x600">800x600</option>
+                            <option value="1280x720">1280x720</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Framerate (fps)</label>
+                        <input type="number" name="framerate" value="15" min="1" max="30">
+                    </div>
+                    <div class="form-group">
+                        <label>Qualità (0-100)</label>
+                        <input type="number" name="quality" value="85" min="0" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Porta HTTP</label>
+                        <input type="number" name="port" value="8080" min="1024" max="65535">
+                    </div>
+                </div>
+
+                <div class="video-upload-section" id="mjpg-upload-section" style="display:none;">
+                    <label><strong>📤 Carica Video</strong></label>
+                    <p style="font-size: 12px; color: #666; margin: 5px 0;">
+                        Formati supportati: MP4, AVI, MKV, MOV, MPG
+                    </p>
+                    <input type="file" id="mjpg-video-upload" accept="video/*" style="margin-top: 10px;">
+                    <button type="button" class="btn-save" onclick="uploadVideo('mjpg')" style="margin-top: 10px;">
+                        ⬆️ Carica Video
+                    </button>
+
+                    <div class="video-list" id="mjpg-video-list"></div>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; align-items: center, gap: 10px;">
+                        <input type="checkbox" name="autostart" id="mjpg-autostart" style="width: auto;">
+                        <span>Avvio automatico al boot del Raspberry</span>
+                    </label>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-start" onclick="startMJPG()">▶ Avvia</button>
+                    <button type="button" class="btn-stop" onclick="stopMJPG()">⏹ Ferma</button>
+                    <button type="button" class="btn-save" onclick="saveMJPGConfig()">💾 Salva Config</button>
+                </div>
+            </form>
+
+            <div class="stream-preview">
+                <strong>URL Stream:</strong>
+                <div class="stream-url" id="mjpg-url">http://[IP_RASPBERRY]:8080</div>
+            </div>
+        </div>
+
+        <!-- RTSP Stream Section -->
+        <div class="stream-section">
+            <h2>
+                RTSP Stream (FFmpeg)
+                <span class="status-badge" id="rtsp-status">Fermo</span>
+            </h2>
+
+            <div class="source-selector">
+                <label>🎬 Sorgente Video</label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="rtsp-source-device" name="rtsp-source" value="device" checked>
+                        <label for="rtsp-source-device">📹 Dispositivo USB</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="rtsp-source-video" name="rtsp-source" value="video">
+                        <label for="rtsp-source-video">🎥 File Video (Loop)</label>
+                    </div>
+                </div>
+            </div>
+
+            <form id="rtsp-form">
+                <div class="form-row">
+                    <div class="form-group" id="rtsp-device-group">
+                        <label>Dispositivo Video</label>
+                        <select name="device" id="rtsp-device">
+                            {% for device in devices %}
+                            <option value="{{ device }}">{{ device }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" id="rtsp-video-group" style="display:none;">
+                        <label>File Video</label>
+                        <select name="video_file" id="rtsp-video-file">
+                            <option value="">Carica un video...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Risoluzione</label>
+                        <select name="resolution">
+                            <option value="320x240">320x240</option>
+                            <option value="640x480" selected>640x480</option>
+                            <option value="800x600">800x600</option>
+                            <option value="1280x720">1280x720</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Framerate (fps)</label>
+                        <input type="number" name="framerate" value="25" min="1" max="30">
+                    </div>
+                    <div class="form-group">
+                        <label>Bitrate</label>
+                        <select name="bitrate">
+                            <option value="500k">500 kbps</option>
+                            <option value="1000k" selected>1 Mbps</option>
+                            <option value="2000k">2 Mbps</option>
+                            <option value="4000k">4 Mbps</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Porta RTSP</label>
+                        <input type="number" name="port" value="8554" min="1024" max="65535">
+                    </div>
+                </div>
+
+                <div class="video-upload-section" id="rtsp-upload-section" style="display:none;">
+                    <label><strong>📤 Carica Video</strong></label>
+                    <p style="font-size: 12px; color: #666; margin: 5px 0;">
+                        Formati supportati: MP4, AVI, MKV, MOV, MPG
+                    </p>
+                    <input type="file" id="rtsp-video-upload" accept="video/*" style="margin-top: 10px;">
+                    <button type="button" class="btn-save" onclick="uploadVideo('rtsp')" style="margin-top: 10px;">
+                        ⬆️ Carica Video
+                    </button>
+
+                    <div class="video-list" id="rtsp-video-list"></div>
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" name="autostart" id="rtsp-autostart" style="width: auto;">
+                        <span>Avvio automatico al boot del Raspberry</span>
+                    </label>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-start" onclick="startRTSP()">▶ Avvia</button>
+                    <button type="button" class="btn-stop" onclick="stopRTSP()">⏹ Ferma</button>
+                    <button type="button" class="btn-save" onclick="saveRTSPConfig()">💾 Salva Config</button>
+                </div>
+            </form>
+
+            <div class="stream-preview">
+                <strong>URL Stream RTSP:</strong>
+                <div class="stream-url" id="rtsp-url">rtsp://[IP_RASPBERRY]:8554/video</div>
+                <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                    💡 Usa VLC o altro player RTSP per visualizzare lo stream
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Impostazioni -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeSettingsModal()">&times;</span>
+                <h2>⚙️ Impostazioni</h2>
+            </div>
+
+            <form id="settings-form">
+                <div class="form-group">
+                    <label>Nuovo Username</label>
+                    <input type="text" name="new_username" placeholder="Lascia vuoto per non cambiare">
+                </div>
+
+                <div class="form-group">
+                    <label>Nuova Password</label>
+                    <input type="password" name="new_password" placeholder="Lascia vuoto per non cambiare">
+                </div>
+
+                <div class="form-group">
+                    <label>Conferma Password</label>
+                    <input type="password" name="confirm_password" placeholder="Conferma la nuova password">
+                </div>
+
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" name="disable_auth" id="disable-auth" style="width: auto;">
+                        <span>Disabilita autenticazione (non consigliato)</span>
+                    </label>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-save" onclick="saveSettings()">💾 Salva Impostazioni</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Gestione sorgente video MJPG
+        document.querySelectorAll('input[name="mjpg-source"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const deviceGroup = document.getElementById('mjpg-device-group');
+                const videoGroup = document.getElementById('mjpg-video-group');
+                const uploadSection = document.getElementById('mjpg-upload-section');
+
+                if (this.value === 'device') {
+                    deviceGroup.style.display = 'block';
+                    videoGroup.style.display = 'none';
+                    uploadSection.style.display = 'none';
+                } else {
+                    deviceGroup.style.display = 'none';
+                    videoGroup.style.display = 'block';
+                    uploadSection.style.display = 'block';
+                    loadVideoList('mjpg');
+                }
+            });
+        });
+
+        // Gestione sorgente video RTSP
+        document.querySelectorAll('input[name="rtsp-source"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const deviceGroup = document.getElementById('rtsp-device-group');
+                const videoGroup = document.getElementById('rtsp-video-group');
+                const uploadSection = document.getElementById('rtsp-upload-section');
+
+                if (this.value === 'device') {
+                    deviceGroup.style.display = 'block';
+                    videoGroup.style.display = 'none';
+                    uploadSection.style.display = 'none';
+                } else {
+                    deviceGroup.style.display = 'none';
+                    videoGroup.style.display = 'block';
+                    uploadSection.style.display = 'block';
+                    loadVideoList('rtsp');
+                }
+            });
+        });
+
+        // Carica lista video
+		function loadVideoList(type, selectedPath = null) {
+			fetch('/api/videos/list')
+				.then(r => r.json())
+				.then(data => {
+					const select = document.getElementById(`${type}-video-file`);
+					const list = document.getElementById(`${type}-video-list`);
+					
+					// Aggiorna select
+					select.innerHTML = '<option value="">Seleziona un video...</option>';
+					data.videos.forEach(video => {
+						const option = document.createElement('option');
+						option.value = video.path;
+						option.textContent = video.name;
+						select.appendChild(option);
+					});
+
+					// Se ho un path salvato, selezionalo
+					if (selectedPath) {
+						select.value = selectedPath;
+					}
+					
+					// Aggiorna lista
+					list.innerHTML = '';
+					data.videos.forEach(video => {
+						const item = document.createElement('div');
+						item.className = 'video-item';
+						item.innerHTML = `
+							<span>🎬 ${video.name} (${video.size})</span>
+							<button onclick="deleteVideo('${video.name}')" style="background:#ef4444;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">🗑️</button>
+						`;
+						list.appendChild(item);
+					});
+				});
+		}
+
+
+
+        // Upload video
+        function uploadVideo(type) {
+            const fileInput = document.getElementById(`${type}-video-upload`);
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showNotification('Seleziona un file video', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('video', file);
+
+            showNotification('Caricamento in corso...', 'success');
+
+            fetch('/api/videos/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Video caricato con successo!', 'success');
+                    fileInput.value = '';
+                    loadVideoList(type);
+                } else {
+                    showNotification('Errore: ' + data.error, 'error');
+                }
+            });
+        }
+
+        // Elimina video
+        function deleteVideo(filename) {
+            if (!confirm(`Eliminare il video "${filename}"?`)) return;
+
+            fetch('/api/videos/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: filename})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Video eliminato', 'success');
+                    loadVideoList('mjpg');
+                    loadVideoList('rtsp');
+                } else {
+                    showNotification('Errore: ' + data.error, 'error');
+                }
+            });
+        }
+
+        // Aggiorna lo stato ogni 2 secondi
+        setInterval(updateStatus, 2000);
+        updateStatus();
+
+        function updateStatus() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    // Aggiorna badge status
+                    updateBadge('mjpg-status', data.mjpg_running);
+                    updateBadge('rtsp-status', data.rtsp_running);
+
+                    // Aggiorna info di sistema
+                    document.getElementById('cpu').textContent = data.system.cpu.toFixed(1) + '%';
+                    document.getElementById('memory').textContent = data.system.memory.toFixed(1) + '%';
+                    document.getElementById('temp').textContent = data.system.temperature.toFixed(1) + '°C';
+
+                    // Aggiorna URL
+                    const hostname = window.location.hostname;
+                    document.getElementById('mjpg-url').textContent = `http://${hostname}:${data.config.mjpg.port}`;
+                    document.getElementById('rtsp-url').textContent = `rtsp://${hostname}:${data.config.rtsp.port}/video`;
+                });
+        }
+
+        function updateBadge(id, running) {
+            const badge = document.getElementById(id);
+            if (running) {
+                badge.textContent = 'In Esecuzione';
+                badge.className = 'status-badge status-running';
+            } else {
+                badge.textContent = 'Fermo';
+                badge.className = 'status-badge status-stopped';
+            }
+        }
+
+        function showNotification(message, type) {
+            const notif = document.getElementById('notification');
+            notif.textContent = message;
+            notif.className = `notification ${type}`;
+            notif.style.display = 'block';
+            setTimeout(() => notif.style.display = 'none', 3000);
+        }
+
+        function startMJPG() {
+            const form = document.getElementById('mjpg-form');
+            const data = new FormData(form);
+
+            // Aggiungi tipo sorgente
+            const sourceType = document.querySelector('input[name="mjpg-source"]:checked').value;
+            data.append('source_type', sourceType);
+
+            fetch('/api/mjpg/start', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('MJPG Streamer avviato con successo!', 'success');
+                    updateStatus();
+                } else {
+                    showNotification('Errore: ' + data.error, 'error');
+                }
+            });
+        }
+
+        function stopMJPG() {
+            fetch('/api/mjpg/stop', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    showNotification('MJPG Streamer fermato', 'success');
+                    updateStatus();
+                });
+        }
+
+        function saveMJPGConfig() {
+            const form = document.getElementById('mjpg-form');
+            const data = new FormData(form);
+
+            // Aggiungi tipo sorgente
+            const sourceType = document.querySelector('input[name="mjpg-source"]:checked').value;
+            data.append('source_type', sourceType);
+
+            fetch('/api/mjpg/save', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(data => {
+                showNotification('Configurazione salvata!', 'success');
+            });
+        }
+
+        function startRTSP() {
+            const form = document.getElementById('rtsp-form');
+            const data = new FormData(form);
+
+            // Aggiungi tipo sorgente
+            const sourceType = document.querySelector('input[name="rtsp-source"]:checked').value;
+            data.append('source_type', sourceType);
+
+            fetch('/api/rtsp/start', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Stream RTSP avviato con successo!', 'success');
+                    updateStatus();
+                } else {
+                    showNotification('Errore: ' + data.error, 'error');
+                }
+            });
+        }
+
+        function stopRTSP() {
+            fetch('/api/rtsp/stop', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    showNotification('Stream RTSP fermato', 'success');
+                    updateStatus();
+                });
+        }
+
+        function saveRTSPConfig() {
+            const form = document.getElementById('rtsp-form');
+            const data = new FormData(form);
+
+            // Aggiungi tipo sorgente
+            const sourceType = document.querySelector('input[name="rtsp-source"]:checked').value;
+            data.append('source_type', sourceType);
+
+            fetch('/api/rtsp/save', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(data => {
+                showNotification('Configurazione salvata!', 'success');
+            });
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'block';
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        function saveSettings() {
+            const form = document.getElementById('settings-form');
+            const data = new FormData(form);
+
+            const newPassword = data.get('new_password');
+            const confirmPassword = data.get('confirm_password');
+
+            if (newPassword && newPassword !== confirmPassword) {
+                showNotification('Le password non corrispondono!', 'error');
+                return;
+            }
+
+            fetch('/api/settings/save', {
+                method: 'POST',
+                body: data
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Impostazioni salvate! Effettua nuovamente il login.', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/logout';
+                    }, 2000);
+                } else {
+                    showNotification('Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            });
+        }
+
+        // Carica configurazione al caricamento pagina
+		// Carica configurazione al caricamento pagina
+		window.onload = function() {
+			fetch('/api/config')
+				.then(r => r.json())
+				.then(config => {
+					// Popola form MJPG
+					const mjpgForm = document.getElementById('mjpg-form');
+					mjpgForm.elements['device'].value = config.mjpg.device;
+					mjpgForm.elements['resolution'].value = config.mjpg.resolution;
+					mjpgForm.elements['framerate'].value = config.mjpg.framerate;
+					mjpgForm.elements['quality'].value = config.mjpg.quality;
+					mjpgForm.elements['port'].value = config.mjpg.port;
+					document.getElementById('mjpg-autostart').checked = config.mjpg.autostart || false;
+
+					// Gestione sorgente MJPG
+					const mjpgSource = config.mjpg.source_type || 'device';
+					if (mjpgSource === 'video') {
+						document.getElementById('mjpg-source-video').checked = true;
+						document.getElementById('mjpg-device-group').style.display = 'none';
+						document.getElementById('mjpg-video-group').style.display = 'block';
+						document.getElementById('mjpg-upload-section').style.display = 'block';
+
+						const videoPath = (config.mjpg.video_path || '');
+						loadVideoList('mjpg', videoPath);
+					} else {
+						document.getElementById('mjpg-source-device').checked = true;
+						document.getElementById('mjpg-device-group').style.display = 'block';
+						document.getElementById('mjpg-video-group').style.display = 'none';
+						document.getElementById('mjpg-upload-section').style.display = 'none';
+					}
+					
+					// Popola form RTSP
+					const rtspForm = document.getElementById('rtsp-form');
+					rtspForm.elements['device'].value = config.rtsp.device;
+					rtspForm.elements['resolution'].value = config.rtsp.resolution;
+					rtspForm.elements['framerate'].value = config.rtsp.framerate;
+					rtspForm.elements['bitrate'].value = config.rtsp.bitrate;
+					rtspForm.elements['port'].value = config.rtsp.port;
+					document.getElementById('rtsp-autostart').checked = config.rtsp.autostart || false;
+
+					// Gestione sorgente RTSP
+					const rtspSource = config.rtsp.source_type || 'device';
+					if (rtspSource === 'video') {
+						document.getElementById('rtsp-source-video').checked = true;
+						document.getElementById('rtsp-device-group').style.display = 'none';
+						document.getElementById('rtsp-video-group').style.display = 'block';
+						document.getElementById('rtsp-upload-section').style.display = 'block';
+
+						const videoPath = (config.rtsp.video_path || '');
+						loadVideoList('rtsp', videoPath);
+					} else {
+						document.getElementById('rtsp-source-device').checked = true;
+						document.getElementById('rtsp-device-group').style.display = 'block';
+						document.getElementById('rtsp-video-group').style.display = 'none';
+						document.getElementById('rtsp-upload-section').style.display = 'none';
+					}
+				});
+		};
+
+
+    </script>
+</body>
+</html>
