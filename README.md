@@ -1,6 +1,25 @@
-================================================================================
-    RASPBERRY PI ZERO 2W - CONVERTITORE VIDEO ANALOGICO → CAMERA IP
-    Guida Completa di Installazione e Configurazione
+# Raspberry Pi Zero 2W – Convertitore Video Analogico → Camera IP  
+Guida Completa di Installazione e Configurazione
+
+## 📑 Indice (GitHub Friendly)
+
+- [1. Hardware Necessario](#1-hardware-necessario)
+- [2. Preparazione Sistema](#2-preparazione-sistema)
+- [3. Installazione Automatica](#3-installazione-automatica)
+- [4. Primo Accesso e Configurazione](#4-primo-accesso-e-configurazione)
+- [5. Gestione Password e Sicurezza](#5-gestione-password-e-sicurezza)
+- [6. Configurazione Avvio Automatico](#6-configurazione-avvio-automatico)
+- [7. Utilizzo dell'Interfaccia Web](#7-utilizzo-dellinterfaccia-web)
+- [8. Accesso agli Stream](#8-accesso-agli-stream)
+- [9. Comandi Utili](#9-comandi-utili)
+- [10. Risoluzione Problemi](#10-risoluzione-problemi)
+- [11. Backup e Ripristino](#11-backup-e-ripristino)
+- [Configurazioni Consigliate](#configurazioni-consigliate)
+- [Supporto e Risorse](#supporto-e-risorse)
+- [Changelog e Note Versione](#changelog-e-note-versione)
+
+---
+
 ================================================================================
 
 INDICE
