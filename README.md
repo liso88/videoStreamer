@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Raspberry Pi Zero 2W – Convertitore Video Analogico → Camera IP  
 Guida Completa di Installazione e Configurazione
 
@@ -21,6 +22,11 @@ Guida Completa di Installazione e Configurazione
 ---
 
 ================================================================================
+=======
+
+    RASPBERRY PI ZERO 2W - CONVERTITORE VIDEO ANALOGICO → CAMERA IP
+    Guida Completa di Installazione e Configurazione
+>>>>>>> 52991564ca119b5bb45c2a017ee0ddecc9a9797b
 
 INDICE
 ------
