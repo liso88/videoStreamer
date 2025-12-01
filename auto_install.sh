@@ -170,6 +170,17 @@ sudo systemctl daemon-reload
 sudo systemctl enable stream-manager.service
 sudo systemctl enable mediamtx.service
 
+# Configura sudo per permettere il riavvio del servizio senza password
+echo "[*] Configurazione permessi sudo per riavvio servizio..."
+SUDOERS_LINE="$USER ALL=(ALL) NOPASSWD: /bin/systemctl restart stream-manager"
+if ! sudo grep -q "$SUDOERS_LINE" /etc/sudoers.d/stream-manager 2>/dev/null; then
+    echo "$SUDOERS_LINE" | sudo tee /etc/sudoers.d/stream-manager > /dev/null
+    sudo chmod 0440 /etc/sudoers.d/stream-manager
+    echo "✅ Permessi sudo configurati"
+else
+    echo "✅ Permessi sudo già configurati"
+fi
+
 # Avvia i servizi
 sudo systemctl start stream-manager.service
 sudo systemctl start mediamtx.service

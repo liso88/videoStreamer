@@ -1,729 +1,531 @@
-<<<<<<< HEAD
-# Raspberry Pi Zero 2W – Convertitore Video Analogico → Camera IP  
-Guida Completa di Installazione e Configurazione
+# 🎥 Raspberry Pi Zero 2W - Video Streaming Manager
 
-## 📑 Indice (GitHub Friendly)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-red.svg)](https://www.raspberrypi.org/)
+[![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/)
 
-- [1. Hardware Necessario](#1-hardware-necessario)
-- [2. Preparazione Sistema](#2-preparazione-sistema)
-- [3. Installazione Automatica](#3-installazione-automatica)
-- [4. Primo Accesso e Configurazione](#4-primo-accesso-e-configurazione)
-- [5. Gestione Password e Sicurezza](#5-gestione-password-e-sicurezza)
-- [6. Configurazione Avvio Automatico](#6-configurazione-avvio-automatico)
-- [7. Utilizzo dell'Interfaccia Web](#7-utilizzo-dellinterfaccia-web)
-- [8. Accesso agli Stream](#8-accesso-agli-stream)
-- [9. Comandi Utili](#9-comandi-utili)
-- [10. Risoluzione Problemi](#10-risoluzione-problemi)
-- [11. Backup e Ripristino](#11-backup-e-ripristino)
-- [Configurazioni Consigliate](#configurazioni-consigliate)
-- [Supporto e Risorse](#supporto-e-risorse)
-- [Changelog e Note Versione](#changelog-e-note-versione)
+Trasforma il tuo Raspberry Pi Zero 2W in un potente convertitore **Video Analogico → Camera IP** con interfaccia web completa per la gestione degli stream.
+
+![Dashboard](https://via.placeholder.com/800x400/667eea/ffffff?text=Stream+Manager+Dashboard)
+
+## ✨ Caratteristiche Principali
+
+- 🎬 **Dual Streaming**: MJPEG (HTTP) e RTSP (H.264) simultanei o indipendenti
+- 🖥️ **Interfaccia Web**: Dashboard moderna e responsive per gestione completa
+- 📹 **Multi-Source**: Supporto per dispositivi video USB e file video in loop
+- 🔐 **Sicurezza**: Autenticazione integrata con gestione password
+- 🚀 **Avvio Automatico**: Configurazione persistente con boot automatico
+- 📊 **Monitoraggio**: CPU, memoria e temperatura in tempo reale
+- 🎞️ **Video Loop**: Carica video locali per streaming continuo
+- 🔄 **Auto-restart**: Riavvio stream e servizi dall'interfaccia web
+
+## 📋 Requisiti Hardware
+
+| Componente | Specifiche |
+|------------|------------|
+| **Raspberry Pi** | Zero 2W (o superiore) |
+| **Adattatore Video** | RCA/Composito to USB (driver UVC) |
+| **MicroSD** | 16GB minimo, 32GB consigliata (Classe 10) |
+| **Alimentatore** | 5V 2.5A ufficiale Raspberry Pi |
+| **Connettività** | WiFi integrato o adattatore USB-Ethernet |
+
+## 🚀 Installazione Rapida
+
+### 1. Prepara il Raspberry Pi
+
+```bash
+# Scarica Raspberry Pi OS Lite (64-bit)
+# Usa Raspberry Pi Imager per configurare:
+# - Username e password
+# - WiFi
+# - SSH abilitato
+```
+
+### 2. Clona il Repository
+
+```bash
+git clone https://github.com/tuousername/raspberry-stream-manager.git
+cd raspberry-stream-manager
+```
+
+### 3. Esegui l'Installazione Automatica
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+L'installazione richiede circa **10-15 minuti** e configura automaticamente:
+- ✅ mjpg-streamer
+- ✅ FFmpeg
+- ✅ MediaMTX (server RTSP)
+- ✅ Flask e dipendenze Python
+- ✅ Servizi systemd per avvio automatico
+
+### 4. Accedi all'Interfaccia Web
+
+Apri il browser e vai su:
+```
+http://[IP_RASPBERRY]:5000
+```
+
+**Credenziali di default:**
+- Username: `admin`
+- Password: `admin`
+
+⚠️ **IMPORTANTE**: Cambia la password immediatamente dopo il primo accesso!
+
+## 📖 Guida Completa
+
+Per istruzioni dettagliate, consultare la [Documentazione Completa](DOCUMENTATION.md).
+
+## 🎯 Configurazioni Consigliate
+
+### Configurazione Leggera (Consigliata per Pi Zero 2W)
+```yaml
+MJPG Streamer:
+  Risoluzione: 640x480
+  Framerate: 15 fps
+  Qualità: 85
+  Avvio automatico: ✓
+  
+RTSP: Disattivato
+```
+
+### Configurazione Qualità
+```yaml
+RTSP Stream:
+  Risoluzione: 640x480
+  Framerate: 25 fps
+  Bitrate: 1 Mbps
+  Avvio automatico: ✓
+  
+MJPG: Disattivato
+```
+
+### Configurazione Video Loop
+```yaml
+Sorgente: File Video
+Video: demo.mp4 (in ~/stream_manager/videos/)
+Loop: Attivo
+Risoluzione: 640x480
+Framerate: 25 fps
+```
+
+## 🔧 Gestione Stream
+
+### Da Interfaccia Web
+- **▶ Avvia**: Avvia lo streaming
+- **⏹ Ferma**: Ferma lo streaming
+- **💾 Salva Config**: Salva configurazione e autostart
+- **🔄 Riavvia**: Riavvia stream o servizio completo
+
+### Da Terminale
+
+```bash
+# Stato servizi
+sudo systemctl status stream-manager
+sudo systemctl status mediamtx
+
+# Riavvia servizi
+sudo systemctl restart stream-manager
+sudo systemctl restart mediamtx
+
+# Log in tempo reale
+sudo journalctl -u stream-manager -f
+
+# Ferma/Avvia manualmente
+sudo systemctl stop stream-manager
+sudo systemctl start stream-manager
+```
+
+## 🌐 Accesso agli Stream
+
+### MJPEG Stream (HTTP)
+```
+Stream diretto:     http://[IP]:8080/?action=stream
+Singola immagine:   http://[IP]:8080/?action=snapshot
+Interfaccia:        http://[IP]:8080
+```
+
+### RTSP Stream (H.264)
+```
+URL RTSP: rtsp://[IP]:8554/video
+```
+
+**Visualizza con VLC:**
+```bash
+vlc rtsp://192.168.1.100:8554/video
+```
+
+## 🏠 Integrazione Home Assistant
+
+### Camera MJPEG
+```yaml
+camera:
+  - platform: mjpeg
+    name: "Camera Analogica"
+    mjpeg_url: http://192.168.1.100:8080/?action=stream
+    still_image_url: http://192.168.1.100:8080/?action=snapshot
+```
+
+### Camera RTSP (FFmpeg)
+```yaml
+camera:
+  - platform: ffmpeg
+    name: "Camera Analogica RTSP"
+    input: rtsp://192.168.1.100:8554/video
+```
+
+## 🎬 Funzionalità Video Loop
+
+Carica video locali per streaming continuo - ideale per demo, test o contenuti pre-registrati.
+
+### Formati Supportati
+- MP4, AVI, MKV, MOV, MPG, MPEG
+
+### Utilizzo
+1. Accedi all'interfaccia web
+2. Seleziona "🎥 File Video (Loop)"
+3. Clicca "📤 Carica Video"
+4. Seleziona il video dalla lista
+5. Avvia lo stream
+
+### Da Terminale
+```bash
+# Crea directory video
+mkdir -p ~/stream_manager/videos
+
+# Copia o scarica video
+cp mio_video.mp4 ~/stream_manager/videos/
+
+# Crea video di test con FFmpeg
+ffmpeg -f lavfi -i testsrc=duration=10:size=640x480:rate=25 \
+       -f lavfi -i sine=frequency=1000:duration=10 \
+       ~/stream_manager/videos/test_pattern.mp4
+```
+
+## 🔐 Sicurezza
+
+### Cambio Password
+
+**Da Interfaccia Web:**
+1. Clicca su "⚙️ Impostazioni"
+2. Inserisci nuova password
+3. Salva e rieffettua il login
+
+**Da Terminale:**
+```bash
+cd ~/stream_manager
+python3 change_password.py
+```
+
+### Reset Password Dimenticata
+```bash
+cd ~/stream_manager
+cat > stream_auth.json <<EOF
+{
+  "username": "admin",
+  "password": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
+  "enabled": true
+}
+EOF
+sudo systemctl restart stream-manager
+```
+
+### Raccomandazioni
+- ✅ Password di almeno 12 caratteri
+- ✅ Mix maiuscole, minuscole, numeri, simboli
+- ✅ Backup del file `stream_auth.json`
+- ❌ Non esporre direttamente su Internet senza VPN
+- ❌ Non disabilitare l'autenticazione
+
+## 🐛 Risoluzione Problemi
+
+### Interfaccia Web Non Risponde
+```bash
+# Verifica stato servizio
+sudo systemctl status stream-manager
+
+# Controlla log
+sudo journalctl -u stream-manager -n 50
+
+# Riavvia servizio
+sudo systemctl restart stream-manager
+```
+
+### Dispositivo Video Non Rilevato
+```bash
+# Verifica dispositivi
+ls -l /dev/video*
+v4l2-ctl --list-devices
+
+# Verifica USB
+lsusb
+dmesg | grep video
+```
+
+### CPU al 100%
+- Non avviare MJPG e RTSP contemporaneamente
+- Riduci risoluzione (es. 320x240)
+- Riduci framerate (10-15 fps)
+- Verifica temperatura: `vcgencmd measure_temp`
+
+### Stream Si Interrompe
+- Verifica alimentazione (usa alimentatore ufficiale 5V 2.5A)
+- Controlla memoria: `free -h`
+- Verifica log: `sudo journalctl -u stream-manager -f`
+
+Per altri problemi, consulta la [Guida Completa](DOCUMENTATION.md#risoluzione-problemi).
+
+## 📊 Monitoraggio Sistema
+
+L'interfaccia web mostra in tempo reale:
+- **CPU**: Utilizzo processore (%)
+- **Memoria**: RAM utilizzata (%)
+- **Temperatura**: Temperatura CPU (°C)
+- **Stato Stream**: In esecuzione / Fermo
+
+### Alert Temperature
+- 🟢 < 60°C: Normale
+- 🟡 60-70°C: Attenzione
+- 🟠 70-80°C: Elevata
+- 🔴 > 80°C: Critica (aggiungi dissipatore)
+
+## 💾 Backup e Ripristino
+
+### Backup Configurazione
+```bash
+# Backup file configurazione
+mkdir -p ~/backup
+cp ~/stream_config.json ~/backup/
+cp ~/stream_auth.json ~/backup/
+
+# Copia sul PC
+scp user@raspberry:/home/user/backup/*.json ./
+```
+
+### Backup Completo SD Card
+```bash
+# Da PC con lettore SD (Linux/Mac)
+sudo dd if=/dev/sdb of=raspberry_backup.img bs=4M status=progress
+gzip raspberry_backup.img
+```
+
+### Ripristino
+```bash
+# Copia configurazione sul Raspberry
+scp backup/*.json user@raspberry:~/
+
+# Riavvia servizio
+ssh user@raspberry "sudo systemctl restart stream-manager"
+```
+
+## 🤝 Contribuire
+
+I contributi sono benvenuti! Per favore:
+
+1. Fork il repository
+2. Crea un branch per la tua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit le modifiche (`git commit -m 'Add some AmazingFeature'`)
+4. Push al branch (`git push origin feature/AmazingFeature`)
+5. Apri una Pull Request
+
+## 📝 Licenza
+
+Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE) per dettagli.
+
+## 🙏 Ringraziamenti
+
+- [mjpg-streamer](https://github.com/jacksonliam/mjpg-streamer) - Streaming MJPEG
+- [MediaMTX](https://github.com/bluenviron/mediamtx) - Server RTSP/RTMP
+- [FFmpeg](https://ffmpeg.org/) - Conversione e processing video
+- [Flask](https://flask.palletsprojects.com/) - Framework web Python
+
+## 📞 Supporto
+
+- **Issues**: [GitHub Issues](https://github.com/tuousername/raspberry-stream-manager/issues)
+- **Documentazione**: [Wiki](https://github.com/tuousername/raspberry-stream-manager/wiki)
+- **Forum**: [Raspberry Pi Forum](https://forums.raspberrypi.com)
+
+## 📈 Roadmap
+
+- [ ] Supporto registrazione video schedulata
+- [ ] Motion detection integrato
+- [ ] Supporto multiple telecamere
+- [ ] Integrazione MQTT
+- [ ] App mobile companion
+- [ ] Supporto H.265/HEVC
+- [ ] Timeline playback video registrati
+- [ ] Cloud storage integration
 
 ---
 
-================================================================================
-=======
-
-    RASPBERRY PI ZERO 2W - CONVERTITORE VIDEO ANALOGICO → CAMERA IP
-    Guida Completa di Installazione e Configurazione
->>>>>>> 52991564ca119b5bb45c2a017ee0ddecc9a9797b
-
-INDICE
-------
-1. Hardware Necessario
-2. Preparazione Sistema
-3. Installazione Automatica
-4. Primo Accesso e Configurazione
-5. Gestione Password e Sicurezza
-6. Configurazione Avvio Automatico
-7. Utilizzo dell'Interfaccia Web
-8. Accesso agli Stream
-9. Comandi Utili
-10. Risoluzione Problemi
-11. Backup e Ripristino
-
-================================================================================
-1. HARDWARE NECESSARIO
-================================================================================
-
-- Raspberry Pi Zero 2W
-- Adattatore Video USB (RCA/Composito to USB)
-- MicroSD Card (minimo 16GB, consigliata 32GB Classe 10)
-- Alimentatore ufficiale Raspberry Pi (5V 2.5A)
-- Cavo micro-USB per alimentazione
-- Connessione WiFi o adattatore USB-Ethernet (opzionale)
-
-================================================================================
-2. PREPARAZIONE SISTEMA
-================================================================================
-
-2.1 INSTALLAZIONE RASPBERRY PI OS
-----------------------------------
-1. Scarica Raspberry Pi Imager da: https://www.raspberrypi.com/software/
-2. Installa Raspberry Pi OS Lite (64-bit) sulla microSD
-3. Durante l'installazione configura:
-   - Nome utente: pi
-   - Password: (scegli una password)
-   - WiFi: inserisci SSID e password
-   - Abilita SSH
-
-2.2 PRIMO AVVIO
----------------
-1. Inserisci la microSD nel Raspberry Pi
-2. Collega l'adattatore video USB
-3. Accendi il Raspberry Pi
-4. Trova l'indirizzo IP del Raspberry:
-   - Dal router
-   - Oppure usa: sudo nmap -sn 192.168.1.0/24
-
-2.3 CONNESSIONE SSH
--------------------
-Da terminale (Linux/Mac) o PowerShell (Windows):
-
-    ssh [TUO_USERNAME]@[IP_RASPBERRY]
-
-Esempio: ssh tommaso@192.168.1.100
-
-NOTA: Sostituisci [TUO_USERNAME] con l'username che hai configurato
-durante l'installazione di Raspberry Pi OS (es. pi, tommaso, etc.)
-
-================================================================================
-3. INSTALLAZIONE AUTOMATICA
-================================================================================
-
-3.1 PREPARAZIONE FILE
----------------------
-Sul tuo computer, crea una cartella e salva questi 3 file:
-- install.sh          (script di installazione)
-- app.py              (applicazione web)
-- change_password.py  (utility cambio password)
-
-3.2 COPIA FILE SUL RASPBERRY
-----------------------------
-Opzione A - Da terminale Linux/Mac:
-
-    scp install.sh app.py change_password.py [TUO_USERNAME]@[IP_RASPBERRY]:~/
-
-Opzione B - Da Windows (PowerShell):
-
-    scp install.sh app.py change_password.py [TUO_USERNAME]@[IP_RASPBERRY]:/home/[TUO_USERNAME]/
-
-Opzione C - Con WinSCP (Windows):
-1. Apri WinSCP
-2. Connetti a: sftp://[IP_RASPBERRY]
-3. Username: [TUO_USERNAME], Password: (tua password)
-4. Copia i 3 file nella tua home directory
-
-NOTA: Sostituisci [TUO_USERNAME] con il tuo username effettivo
-
-3.3 ESECUZIONE INSTALLAZIONE
------------------------------
-Connettiti via SSH e esegui:
-
-    cd ~
-    chmod +x install.sh
-    bash install.sh
-
-Lo script installerà automaticamente:
-- mjpg-streamer (streaming MJPEG)
-- FFmpeg (conversione video)
-- MediaMTX (server RTSP)
-- Flask e dipendenze Python
-- Interfaccia web di gestione
-- Servizi systemd per avvio automatico
-
-Tempo stimato: 10-15 minuti
-
-3.4 VERIFICA INSTALLAZIONE
----------------------------
-Controlla che i servizi siano attivi:
-
-    sudo systemctl status stream-manager
-    sudo systemctl status mediamtx
-
-Dovresti vedere: "active (running)" per entrambi.
-
-================================================================================
-4. PRIMO ACCESSO E CONFIGURAZIONE
-================================================================================
-
-4.1 ACCESSO ALL'INTERFACCIA WEB
---------------------------------
-1. Apri il browser
-2. Vai su: http://[IP_RASPBERRY]:5000
-3. Login con credenziali di default:
-   - Username: admin
-   - Password: admin
-
-⚠️ IMPORTANTE: CAMBIA IMMEDIATAMENTE LA PASSWORD!
-
-4.2 CAMBIO PASSWORD (METODO WEB)
----------------------------------
-1. Clicca su "⚙️ Impostazioni" in alto a destra
-2. Compila i campi:
-   - Nuovo Username: (opzionale, lascia vuoto per mantenere "admin")
-   - Nuova Password: (scegli una password forte)
-   - Conferma Password: (ripeti la password)
-3. Clicca "💾 Salva Impostazioni"
-4. Verrai disconnesso automaticamente
-5. Effettua nuovamente il login con le nuove credenziali
-
-4.3 VERIFICA DISPOSITIVO VIDEO
--------------------------------
-Nell'interfaccia web, controlla che venga rilevato /dev/video0
-Se non viene rilevato:
-
-    ssh [TUO_USERNAME]@[IP_RASPBERRY]
-    ls -l /dev/video*
-    v4l2-ctl --list-devices
-
-Se il dispositivo ha un numero diverso (es. /dev/video1), 
-selezionalo dal menu a tendina nell'interfaccia.
-
-================================================================================
-5. GESTIONE PASSWORD E SICUREZZA
-================================================================================
-
-5.1 CAMBIO PASSWORD DA TERMINALE
----------------------------------
-Connettiti via SSH:
-
-    cd ~/stream_manager
-    python3 change_password.py
-
-Segui le istruzioni a schermo per:
-- Cambiare username
-- Cambiare password
-- Abilitare/disabilitare autenticazione
-
-Dopo il cambio, riavvia il servizio:
-
-    sudo systemctl restart stream-manager
-
-5.2 RESET PASSWORD DIMENTICATA
--------------------------------
-Se dimentichi la password, ricrea le credenziali di default:
-
-    cd ~/stream_manager
-    cat > stream_auth.json <<EOF
-    {
-      "username": "admin",
-      "password": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
-      "enabled": true
-    }
-    EOF
-    sudo systemctl restart stream-manager
-
-Poi accedi con admin/admin e cambia subito la password.
-
-5.3 RACCOMANDAZIONI SICUREZZA
-------------------------------
-✓ Usa password di almeno 12 caratteri
-✓ Mix di maiuscole, minuscole, numeri e simboli
-✓ Non usare parole del dizionario
-✓ Non condividere le credenziali
-✓ Fai backup del file stream_auth.json
-✗ Non disabilitare l'autenticazione
-✗ Non esporre l'interfaccia direttamente su Internet
-
-================================================================================
-6. CONFIGURAZIONE AVVIO AUTOMATICO
-================================================================================
-
-6.1 CONFIGURAZIONE MJPG STREAMER
----------------------------------
-1. Accedi all'interfaccia web
-2. Sezione "MJPG Streamer":
-   - Dispositivo Video: /dev/video0
-   - Risoluzione: 640x480 (consigliata per Pi Zero 2W)
-   - Framerate: 15 fps
-   - Qualità: 85
-   - Porta HTTP: 8080
-   - ✓ Spunta "Avvio automatico al boot"
-3. Clicca "💾 Salva Config"
-
-6.2 CONFIGURAZIONE RTSP STREAM
--------------------------------
-1. Sezione "RTSP Stream (FFmpeg)":
-   - Dispositivo Video: /dev/video0
-   - Risoluzione: 640x480
-   - Framerate: 25 fps
-   - Bitrate: 1000k (1 Mbps)
-   - Porta RTSP: 8554
-   - ✓ Spunta "Avvio automatico al boot" (opzionale)
-3. Clicca "💾 Salva Config"
-
-⚠️ IMPORTANTE: Sul Pi Zero 2W evita di avviare MJPG e RTSP contemporaneamente
-per non sovraccaricare la CPU. Scegli uno solo per l'avvio automatico.
-
-6.3 TEST AVVIO AUTOMATICO
---------------------------
-Riavvia il Raspberry per testare:
-
-    sudo reboot
-
-Dopo il riavvio (circa 30-40 secondi):
-1. L'interfaccia web sarà disponibile su porta 5000
-2. Gli stream configurati si avvieranno automaticamente
-3. Verifica lo stato dall'interfaccia web
-
-================================================================================
-7. UTILIZZO DELL'INTERFACCIA WEB
-================================================================================
-
-7.1 DASHBOARD
--------------
-Mostra in tempo reale:
-- Stato CPU (%)
-- Utilizzo Memoria (%)
-- Temperatura (°C)
-- Stato MJPG Streamer (In Esecuzione / Fermo)
-- Stato RTSP Stream (In Esecuzione / Fermo)
-
-7.2 GESTIONE MJPG STREAMER
----------------------------
-Pulsanti disponibili:
-- ▶ Avvia: Avvia lo streaming MJPEG
-- ⏹ Ferma: Ferma lo streaming
-- 💾 Salva Config: Salva la configurazione (incluso avvio automatico)
-
-URL Stream: http://[IP_RASPBERRY]:8080
-
-7.3 GESTIONE RTSP STREAM
--------------------------
-Pulsanti disponibili:
-- ▶ Avvia: Avvia lo streaming RTSP
-- ⏹ Ferma: Ferma lo streaming
-- 💾 Salva Config: Salva la configurazione
-
-URL Stream: rtsp://[IP_RASPBERRY]:8554/video
-
-7.4 IMPOSTAZIONI
-----------------
-Click su "⚙️ Impostazioni":
-- Cambia username
-- Cambia password
-- Disabilita autenticazione (sconsigliato)
-
-7.5 LOGOUT
-----------
-Click su "🚪 Esci" per terminare la sessione
-
-================================================================================
-8. ACCESSO AGLI STREAM
-================================================================================
-
-8.1 STREAM MJPEG
-----------------
-Visualizzazione Web (Browser):
-- URL principale: http://[IP_RASPBERRY]:8080
-- Stream diretto: http://[IP_RASPBERRY]:8080/?action=stream
-- Singola immagine: http://[IP_RASPBERRY]:8080/?action=snapshot
-
-Esempio HTML per embedding:
-    <img src="http://192.168.1.100:8080/?action=stream" />
-
-8.2 STREAM RTSP
----------------
-Visualizzazione con VLC:
-1. Apri VLC
-2. Media → Apri flusso di rete
-3. URL: rtsp://[IP_RASPBERRY]:8554/video
-4. Play
-
-Da riga di comando:
-    vlc rtsp://[IP_RASPBERRY]:8554/video
-    ffplay rtsp://[IP_RASPBERRY]:8554/video
-
-8.3 INTEGRAZIONE HOME ASSISTANT
---------------------------------
-Aggiungi al file configuration.yaml:
-
-    camera:
-      - platform: mjpeg
-        name: "Camera Analogica"
-        mjpeg_url: http://[IP_RASPBERRY]:8080/?action=stream
-        still_image_url: http://[IP_RASPBERRY]:8080/?action=snapshot
-
-Oppure per RTSP:
-
-    camera:
-      - platform: ffmpeg
-        name: "Camera Analogica RTSP"
-        input: rtsp://[IP_RASPBERRY]:8554/video
-
-8.4 INTEGRAZIONE FRIGATE NVR
------------------------------
-Nel file config.yml di Frigate:
-
-    cameras:
-      camera_analogica:
-        ffmpeg:
-          inputs:
-            - path: rtsp://[IP_RASPBERRY]:8554/video
-              roles:
-                - detect
-                - record
-
-================================================================================
-9. COMANDI UTILI
-================================================================================
-
-9.1 GESTIONE SERVIZI
----------------------
-Stato servizi:
-    sudo systemctl status stream-manager
-    sudo systemctl status mediamtx
-
-Riavvia servizi:
-    sudo systemctl restart stream-manager
-    sudo systemctl restart mediamtx
-
-Ferma servizi:
-    sudo systemctl stop stream-manager
-    sudo systemctl stop mediamtx
-
-Avvia servizi:
-    sudo systemctl start stream-manager
-    sudo systemctl start mediamtx
-
-Disabilita avvio automatico:
-    sudo systemctl disable stream-manager
-    sudo systemctl disable mediamtx
-
-Abilita avvio automatico:
-    sudo systemctl enable stream-manager
-    sudo systemctl enable mediamtx
-
-9.2 VISUALIZZAZIONE LOG
-------------------------
-Log in tempo reale:
-    sudo journalctl -u stream-manager -f
-    sudo journalctl -u mediamtx -f
-
-Ultimi 100 log:
-    sudo journalctl -u stream-manager -n 100
-    sudo journalctl -u mediamtx -n 100
-
-Log degli errori:
-    sudo journalctl -u stream-manager -p err
-
-9.3 VERIFICA DISPOSITIVI VIDEO
--------------------------------
-Lista dispositivi:
-    ls -l /dev/video*
-
-Informazioni dispositivo:
-    v4l2-ctl --list-devices
-    v4l2-ctl -d /dev/video0 --list-formats
-    v4l2-ctl -d /dev/video0 --all
-
-9.4 MONITORAGGIO SISTEMA
--------------------------
-Utilizzo CPU e memoria:
-    htop
-
-Temperatura CPU:
-    vcgencmd measure_temp
-
-Velocità CPU:
-    vcgencmd measure_clock arm
-
-Informazioni sistema:
-    uname -a
-    cat /proc/cpuinfo
-
-9.5 GESTIONE PROCESSI STREAM
------------------------------
-Verifica processi attivi:
-    ps aux | grep mjpg
-    ps aux | grep ffmpeg
-    ps aux | grep mediamtx
-
-Termina manualmente processi:
-    sudo pkill -f mjpg_streamer
-    sudo pkill -f ffmpeg
-    sudo pkill mediamtx
-
-================================================================================
-10. RISOLUZIONE PROBLEMI
-================================================================================
-
-10.1 L'INTERFACCIA WEB NON SI APRE
------------------------------------
-Problema: http://[IP]:5000 non risponde
-
-Soluzione:
-1. Verifica che il servizio sia attivo:
-   sudo systemctl status stream-manager
-
-2. Se non è attivo, avvialo:
-   sudo systemctl start stream-manager
-
-3. Controlla i log per errori:
-   sudo journalctl -u stream-manager -n 50
-
-4. Verifica la porta:
-   sudo netstat -tulpn | grep 5000
-
-5. Verifica il firewall:
-   sudo ufw status
-
-10.2 DISPOSITIVO VIDEO NON RILEVATO
-------------------------------------
-Problema: /dev/video0 non esiste
-
-Soluzione:
-1. Verifica che l'adattatore USB sia collegato
-2. Controlla i dispositivi:
-   lsusb
-   ls -l /dev/video*
-
-3. Verifica driver:
-   dmesg | grep video
-   dmesg | grep uvc
-
-4. Prova a scollegare e ricollegare l'adattatore USB
-
-5. Se il dispositivo appare come /dev/video1 o altro numero,
-   selezionalo dal menu dell'interfaccia web
-
-10.3 STREAM NON SI AVVIA
--------------------------
-Problema: Lo stream non parte quando clicco "Avvia"
-
-Soluzione MJPG:
-1. Verifica il dispositivo:
-   v4l2-ctl -d /dev/video0 --list-formats
-
-2. Prova manualmente:
-   mjpg_streamer -i "input_uvc.so -d /dev/video0 -r 640x480 -f 15" \
-                 -o "output_http.so -p 8080"
-
-3. Controlla i log:
-   sudo journalctl -u stream-manager -f
-
-Soluzione RTSP:
-1. Verifica MediaMTX:
-   sudo systemctl status mediamtx
-
-2. Verifica FFmpeg:
-   ps aux | grep ffmpeg
-
-3. Test manuale FFmpeg:
-   ffmpeg -f v4l2 -i /dev/video0 -f mpegts -
-
-10.4 QUALITÀ VIDEO SCARSA
---------------------------
-Problema: Video sfocato o a scatti
-
-Soluzione:
-1. Aumenta la risoluzione (es. 800x600 o 1280x720)
-2. Aumenta il bitrate RTSP (es. 2000k invece di 1000k)
-3. Aumenta la qualità MJPG (es. 95 invece di 85)
-4. Riduci il framerate se la CPU è al limite
-5. Usa RTSP invece di MJPG per qualità superiore
-
-10.5 CPU AL 100%
-----------------
-Problema: Il Raspberry è lento, CPU sempre al massimo
-
-Soluzione:
-1. Non avviare MJPG e RTSP contemporaneamente
-2. Riduci risoluzione (es. 320x240 o 640x480)
-3. Riduci framerate (es. 10-15 fps invece di 25-30)
-4. Per RTSP, usa preset "ultrafast" (già configurato)
-5. Monitora la temperatura:
-   vcgencmd measure_temp
-   Se supera 80°C, aggiungi un dissipatore
-
-10.6 STREAM SI INTERROMPE
---------------------------
-Problema: Lo stream parte ma si ferma dopo pochi secondi
-
-Soluzione:
-1. Verifica alimentazione (usa alimentatore ufficiale 5V 2.5A)
-2. Controlla i log:
-   sudo journalctl -u stream-manager -f
-
-3. Verifica la memoria:
-   free -h
-
-4. Riavvia il servizio:
-   sudo systemctl restart stream-manager
-
-10.7 NON RIESCO A FARE LOGIN
------------------------------
-Problema: "Username o password non validi"
-
-Soluzione:
-1. Verifica di usare le credenziali corrette
-2. Se le hai dimenticate, resetta (vedi sezione 5.2)
-3. Controlla che il file auth esista:
-   ls -l ~/stream_manager/stream_auth.json
-
-4. Se necessario, ricrea il file credenziali di default
-
-10.8 AVVIO AUTOMATICO NON FUNZIONA
------------------------------------
-Problema: Dopo il reboot gli stream non partono
-
-Soluzione:
-1. Verifica che l'avvio automatico sia abilitato nell'interfaccia
-2. Controlla la configurazione:
-   cat ~/stream_manager/stream_config.json
-   Cerca "autostart": true
-
-3. Verifica i servizi systemd:
-   sudo systemctl is-enabled stream-manager
-   sudo systemctl is-enabled mediamtx
-
-4. Controlla i log di avvio:
-   sudo journalctl -u stream-manager --since "5 minutes ago"
-
-================================================================================
-11. BACKUP E RIPRISTINO
-================================================================================
-
-11.1 BACKUP CONFIGURAZIONE
----------------------------
-Salva questi file importanti:
-
-    # Crea directory backup
-    mkdir -p ~/backup
-    
-    # Backup configurazione stream
-    cp ~/stream_config.json ~/backup/
-    
-    # Backup credenziali
-    cp ~/stream_auth.json ~/backup/
-    
-    # Copia i backup sul tuo computer
-    # Da terminale locale (sostituisci [TUO_USERNAME]):
-    scp [TUO_USERNAME]@[IP_RASPBERRY]:~/backup/*.json ./
-
-11.2 RIPRISTINO CONFIGURAZIONE
--------------------------------
-Copia i file di backup sul Raspberry:
-
-    # Dal tuo computer (sostituisci [TUO_USERNAME])
-    scp stream_config.json stream_auth.json [TUO_USERNAME]@[IP_RASPBERRY]:~/
-    
-    # Sul Raspberry
-    sudo systemctl restart stream-manager
-
-11.3 BACKUP COMPLETO SD CARD
------------------------------
-Da computer con lettore SD (Linux/Mac):
-
-    # Inserisci la SD card
-    # Trova il device (es. /dev/sdb)
-    lsblk
-    
-    # Crea immagine backup
-    sudo dd if=/dev/sdb of=raspberry_backup.img bs=4M status=progress
-    
-    # Comprimi (opzionale)
-    gzip raspberry_backup.img
-
-Da Windows, usa Win32DiskImager o Etcher.
-
-11.4 RIPRISTINO DA BACKUP SD
------------------------------
-    # Scrivi l'immagine su una nuova SD
-    sudo dd if=raspberry_backup.img of=/dev/sdb bs=4M status=progress
-
-11.5 REINSTALLAZIONE RAPIDA
-----------------------------
-Se devi reinstallare tutto:
-
-    # Rimuovi installazione corrente
-    rm -rf ~/stream_manager
-    sudo systemctl disable stream-manager
-    sudo systemctl disable mediamtx
-    sudo rm /etc/systemd/system/stream-manager.service
-    sudo rm /etc/systemd/system/mediamtx.service
-    
-    # Riesegui installazione
-    bash install.sh
-
-================================================================================
-CONFIGURAZIONI CONSIGLIATE PER RASPBERRY PI ZERO 2W
-================================================================================
-
-CONFIGURAZIONE LEGGERA (consigliata):
---------------------------------------
-MJPG Streamer:
-- Risoluzione: 640x480
-- Framerate: 15 fps
-- Qualità: 85
-- Avvio automatico: ON
-
-RTSP: Disattivato
-
-CONFIGURAZIONE QUALITÀ:
------------------------
-RTSP Stream:
-- Risoluzione: 640x480
-- Framerate: 25 fps
-- Bitrate: 1000k
-- Avvio automatico: ON
-
-MJPG: Disattivato
-
-CONFIGURAZIONE BILANCIATA:
---------------------------
-Usa MJPG per l'interfaccia web e visualizzazione rapida
-Usa RTSP solo quando serve qualità superiore o recording
-NON avviare entrambi automaticamente
-
-================================================================================
-SUPPORTO E RISORSE
-================================================================================
-
-Documentazione:
-- mjpg-streamer: https://github.com/jacksonliam/mjpg-streamer
-- MediaMTX: https://github.com/bluenviron/mediamtx
-- FFmpeg: https://ffmpeg.org/documentation.html
-
-Forum e Community:
-- Raspberry Pi Forum: https://forums.raspberrypi.com
-- Reddit r/raspberry_pi: https://reddit.com/r/raspberry_pi
-
-Verifica stato sistema:
-    http://[IP_RASPBERRY]:5000
-
-Log in tempo reale:
-    sudo journalctl -u stream-manager -f
-
-================================================================================
-CHANGELOG E NOTE VERSIONE
-================================================================================
-
-Versione: 1.0
-Data: 2024
-
-Funzionalità:
-✓ Streaming MJPEG su HTTP
-✓ Streaming RTSP con H.264
-✓ Interfaccia web responsive
-✓ Autenticazione con login
-✓ Avvio automatico configurabile
-✓ Monitoraggio sistema in tempo reale
-✓ Gestione multi-dispositivo video
-✓ Configurazione persistente
-
-Requisiti:
+## 📋 Changelog
+
+### Version 1.0 - Tommaso (2024-11-30)
+
+#### 🎉 Rilascio Iniziale
+
+**Funzionalità Core:**
+- ✅ Streaming MJPEG su HTTP (mjpg-streamer)
+- ✅ Streaming RTSP con codec H.264 (FFmpeg + MediaMTX)
+- ✅ Interfaccia web responsive e moderna
+- ✅ Autenticazione con login (username/password)
+- ✅ Dashboard con monitoraggio sistema (CPU, RAM, temperatura)
+- ✅ Gestione dispositivi video USB (compatibili UVC)
+
+**Configurazione:**
+- ✅ Avvio automatico configurabile per stream
+- ✅ Configurazione persistente (JSON)
+- ✅ Gestione porte personalizzabili
+- ✅ Parametri video regolabili (risoluzione, framerate, qualità, bitrate)
+- ✅ Supporto username dinamici (non solo 'pi')
+
+**Video Loop:**
+- ✅ Supporto file video come sorgente stream
+- ✅ Upload video tramite interfaccia web
+- ✅ Loop infinito automatico
+- ✅ Formati supportati: MP4, AVI, MKV, MOV, MPG, MPEG
+- ✅ Gestione libreria video (lista, upload, elimina)
+- ✅ Selezione sorgente per MJPG e RTSP indipendenti
+
+**Gestione Stream:**
+- ✅ Avvio/Stop stream da interfaccia web
+- ✅ Riavvio stream singoli (MJPG/RTSP)
+- ✅ Riavvio completo servizio stream-manager
+- ✅ Stato stream in tempo reale
+- ✅ Auto-recovery su errori
+
+**Sicurezza:**
+- ✅ Sistema di autenticazione con password hash (SHA-256)
+- ✅ Cambio password da interfaccia web
+- ✅ Cambio password da terminale (change_password.py)
+- ✅ Reset password dimenticata
+- ✅ Opzione disabilitazione autenticazione
+- ✅ Session management con timeout
+
+**Sistema:**
+- ✅ Servizi systemd per avvio automatico al boot
+- ✅ Gestione processi ottimizzata
+- ✅ Log strutturati (journalctl)
+- ✅ Gestione errori robusta
+- ✅ Compatibilità Raspberry Pi Zero 2W
+- ✅ Supporto Raspberry Pi OS 64-bit
+
+**Interfaccia Web:**
+- ✅ Design moderno con gradiente viola
+- ✅ Layout responsive (mobile-friendly)
+- ✅ Notifiche toast per feedback azioni
+- ✅ Modal per impostazioni
+- ✅ Aggiornamento stato in tempo reale (polling 2s)
+- ✅ Visualizzazione URL stream
+- ✅ Form validazione client-side
+
+**Documentazione:**
+- ✅ README.md completo per GitHub
+- ✅ Guida installazione dettagliata
+- ✅ Documentazione completa (DOCUMENTATION.md)
+- ✅ Script installazione automatica
+- ✅ Esempi integrazione Home Assistant
+- ✅ Risoluzione problemi comuni
+- ✅ Configurazioni consigliate
+
+**Script e Tool:**
+- ✅ install.sh - Installazione automatica completa
+- ✅ change_password.py - Utility cambio credenziali
+- ✅ fix_username.sh - Fix installazioni con username errato
+- ✅ Servizi systemd configurati
+
+**Bug Fix:**
+- 🐛 Risolto problema path hardcoded con username 'pi'
+- 🐛 Risolto caricamento configurazione al boot
+- 🐛 Corretta gestione processi FFmpeg
+- 🐛 Migliorata pulizia risorse temporanee
+- 🐛 Fix permessi file e directory
+
+**Ottimizzazioni:**
+- ⚡ Ridotto utilizzo CPU con preset ultrafast
+- ⚡ Ottimizzazione gestione memoria
+- ⚡ Migliorata performance UI con lazy loading
+- ⚡ Ridotta latenza stream RTSP
+- ⚡ Gestione efficiente dei video loop
+
+**Limitazioni Note:**
+- ⚠️ Su Pi Zero 2W evitare MJPG + RTSP simultanei
+- ⚠️ Risoluzione max consigliata: 1280x720 @ 15fps
+- ⚠️ Video loop richiedono spazio su SD card
+- ⚠️ Latenza stream: 1-2 secondi
+- ⚠️ No recording schedulato (roadmap futura)
+
+**Requisiti di Sistema:**
 - Raspberry Pi Zero 2W o superiore
 - Raspberry Pi OS (64-bit) Lite o Desktop
-- Adattatore video USB compatibile Linux (driver UVC)
-- Connessione di rete (WiFi o Ethernet)
+- Python 3.7+
+- FFmpeg 4.x+
+- Spazio libero: 2GB minimo
+- RAM: 512MB minimo
 
-================================================================================
-FINE DELLA GUIDA
-================================================================================
+**Porte Utilizzate:**
+- 5000: Interfaccia web (Flask)
+- 8080: Stream MJPEG (mjpg-streamer)
+- 8554: Stream RTSP (MediaMTX)
+- 8000: RTP (MediaMTX)
+- 8001: RTCP (MediaMTX)
 
-Per domande o problemi non coperti in questa guida, controlla i log:
-    sudo journalctl -u stream-manager -n 100
+**Credenziali Default:**
+- Username: `admin`
+- Password: `admin`
+- ⚠️ **Cambiarle immediatamente dopo il primo accesso!**
 
-Buona visione con il tuo stream!
+---
+
+### 📝 Note di Versione
+
+**Testato su:**
+- ✅ Raspberry Pi Zero 2W
+- ✅ Raspberry Pi 3B+
+- ✅ Raspberry Pi 4B
+- ✅ Raspberry Pi OS Lite 64-bit (Bookworm)
+
+**Browser Supportati:**
+- ✅ Chrome/Chromium 90+
+- ✅ Firefox 88+
+- ✅ Safari 14+
+- ✅ Edge 90+
+
+**Adattatori Video Testati:**
+- ✅ EasyCAP USB 2.0
+- ✅ Elgato Video Capture
+- ✅ Generic UVC Video Adapter
+- ⚠️ Verificare compatibilità driver UVC Linux
+
+---
+
+### 🔜 Prossime Versioni
+
+**v1.1 (Pianificata)**
+- [ ] Registrazione video manuale
+- [ ] Snapshot programmati
+- [ ] Notifiche email/telegram
+- [ ] Gestione utenti multipli
+- [ ] API REST documentata
+
+**v1.2 (Pianificata)**
+- [ ] Motion detection
+- [ ] Zone detection configurabili
+- [ ] Timeline eventi
+- [ ] Integrazione cloud storage
+
+**v2.0 (Futura)**
+- [ ] Supporto multiple telecamere
+- [ ] Dashboard multi-stream
+- [ ] Recording schedulato
+- [ ] App mobile iOS/Android
+
+---
+
+**Autore:** Tommaso  
+**Data Rilascio:** 30 Novembre 2024  
+**Versione:** 1.0 (Tommaso v1.20251130)
+
