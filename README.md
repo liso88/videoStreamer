@@ -18,7 +18,7 @@ Trasforma il tuo Raspberry Pi Zero 2W in un potente convertitore **Video Analogi
 - **Video Loop**: Carica video locali per streaming continuo
 - **Auto-restart**: Riavvio stream e servizi dall'interfaccia web
 
-## 📋 Requisiti Hardware
+## Requisiti Hardware
 
 | Componente | Specifiche |
 |------------|------------|
@@ -146,9 +146,9 @@ URL RTSP: rtsp://[IP]:8554/video
 vlc rtsp://192.168.1.100:8554/video
 ```
 
-## Integrazione Home Assistant
+## Integrazione
 
-### Camera MJPEG
+### MJPEG
 ```yaml
 camera:
   - platform: mjpeg
@@ -157,7 +157,7 @@ camera:
     still_image_url: http://192.168.1.100:8080/?action=snapshot
 ```
 
-### Camera RTSP (FFmpeg)
+### RTSP (FFmpeg)
 ```yaml
 camera:
   - platform: ffmpeg
@@ -181,7 +181,7 @@ ffmpeg -f lavfi -i testsrc=duration=10:size=640x480:rate=25 \
        ~/stream_manager/videos/test_pattern.mp4
 ```
 
-## Sicurezza
+## Password
 
 ### Cambio Password
 
@@ -234,11 +234,6 @@ lsusb
 dmesg | grep video
 ```
 
-### CPU al 100%
-- Non avviare MJPG e RTSP contemporaneamente
-- Riduci risoluzione (es. 320x240)
-- Riduci framerate (10-15 fps)
-- Verifica temperatura: `vcgencmd measure_temp`
 
 ### Stream Si Interrompe
 - Verifica alimentazione (usa alimentatore ufficiale 5V 2.5A)
@@ -247,13 +242,6 @@ dmesg | grep video
 
 Per altri problemi, consulta la [Guida Completa](DOCUMENTATION.md#risoluzione-problemi).
 
-## Monitoraggio Sistema
-
-L'interfaccia web mostra in tempo reale:
-- **CPU**: Utilizzo processore (%)
-- **Memoria**: RAM utilizzata (%)
-- **Temperatura**: Temperatura CPU (°C)
-- **Stato Stream**: In esecuzione / Fermo
 
 
 ## Backup e Ripristino
@@ -285,118 +273,9 @@ scp backup/*.json user@raspberry:~/
 ssh user@raspberry "sudo systemctl restart stream-manager"
 ```
 
-## Licenza
 
-Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE) per dettagli.
 
----
-
-## 📋 Changelog
-
-### Version 1.0 - Tommaso (2024-11-30)
-
-#### 🎉 Rilascio Iniziale
-
-**Funzionalità Core:**
-- ✅ Streaming MJPEG su HTTP (mjpg-streamer)
-- ✅ Streaming RTSP con codec H.264 (FFmpeg + MediaMTX)
-- ✅ Interfaccia web responsive e moderna
-- ✅ Autenticazione con login (username/password)
-- ✅ Dashboard con monitoraggio sistema (CPU, RAM, temperatura)
-- ✅ Gestione dispositivi video USB (compatibili UVC)
-
-**Configurazione:**
-- ✅ Avvio automatico configurabile per stream
-- ✅ Configurazione persistente (JSON)
-- ✅ Gestione porte personalizzabili
-- ✅ Parametri video regolabili (risoluzione, framerate, qualità, bitrate)
-- ✅ Supporto username dinamici (non solo 'pi')
-
-**Video Loop:**
-- ✅ Supporto file video come sorgente stream
-- ✅ Upload video tramite interfaccia web
-- ✅ Loop infinito automatico
-- ✅ Formati supportati: MP4, AVI, MKV, MOV, MPG, MPEG
-- ✅ Gestione libreria video (lista, upload, elimina)
-- ✅ Selezione sorgente per MJPG e RTSP indipendenti
-
-**Gestione Stream:**
-- ✅ Avvio/Stop stream da interfaccia web
-- ✅ Riavvio stream singoli (MJPG/RTSP)
-- ✅ Riavvio completo servizio stream-manager
-- ✅ Stato stream in tempo reale
-- ✅ Auto-recovery su errori
-
-**Sicurezza:**
-- ✅ Sistema di autenticazione con password hash (SHA-256)
-- ✅ Cambio password da interfaccia web
-- ✅ Cambio password da terminale (change_password.py)
-- ✅ Reset password dimenticata
-- ✅ Opzione disabilitazione autenticazione
-- ✅ Session management con timeout
-
-**Sistema:**
-- ✅ Servizi systemd per avvio automatico al boot
-- ✅ Gestione processi ottimizzata
-- ✅ Log strutturati (journalctl)
-- ✅ Gestione errori robusta
-- ✅ Compatibilità Raspberry Pi Zero 2W
-- ✅ Supporto Raspberry Pi OS 64-bit
-
-**Interfaccia Web:**
-- ✅ Design moderno con gradiente viola
-- ✅ Layout responsive (mobile-friendly)
-- ✅ Notifiche toast per feedback azioni
-- ✅ Modal per impostazioni
-- ✅ Aggiornamento stato in tempo reale (polling 2s)
-- ✅ Visualizzazione URL stream
-- ✅ Form validazione client-side
-
-**Documentazione:**
-- ✅ README.md completo per GitHub
-- ✅ Guida installazione dettagliata
-- ✅ Documentazione completa (DOCUMENTATION.md)
-- ✅ Script installazione automatica
-- ✅ Esempi integrazione Home Assistant
-- ✅ Risoluzione problemi comuni
-- ✅ Configurazioni consigliate
-
-**Script e Tool:**
-- ✅ install.sh - Installazione automatica completa
-- ✅ change_password.py - Utility cambio credenziali
-- ✅ fix_username.sh - Fix installazioni con username errato
-- ✅ Servizi systemd configurati
-
-**Bug Fix:**
-- 🐛 Risolto problema path hardcoded con username 'pi'
-- 🐛 Risolto caricamento configurazione al boot
-- 🐛 Corretta gestione processi FFmpeg
-- 🐛 Migliorata pulizia risorse temporanee
-- 🐛 Fix permessi file e directory
-
-**Ottimizzazioni:**
-- ⚡ Ridotto utilizzo CPU con preset ultrafast
-- ⚡ Ottimizzazione gestione memoria
-- ⚡ Migliorata performance UI con lazy loading
-- ⚡ Ridotta latenza stream RTSP
-- ⚡ Gestione efficiente dei video loop
-
-**Limitazioni Note:**
-- ⚠️ Su Pi Zero 2W evitare MJPG + RTSP simultanei
-- ⚠️ Risoluzione max consigliata: 1280x720 @ 15fps
-- ⚠️ Video loop richiedono spazio su SD card
-- ⚠️ Latenza stream: 1-2 secondi
-- ⚠️ No recording schedulato (roadmap futura)
-
-**Requisiti di Sistema:**
-- Raspberry Pi Zero 2W o superiore
-- Raspberry Pi OS (64-bit) Lite o Desktop
-- Python 3.7+
-- FFmpeg 4.x+
-- Spazio libero: 2GB minimo
-- RAM: 512MB minimo
-
-**Porte Utilizzate:**
+## Porte Utilizzate:
 - 5000: Interfaccia web (Flask)
 - 8080: Stream MJPEG (mjpg-streamer)
 - 8554: Stream RTSP (MediaMTX)
@@ -407,6 +286,47 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 - Username: `admin`
 - Password: `admin`
 - ⚠️ **Cambiarle immediatamente dopo il primo accesso!**
+
+## Licenza
+
+Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE) per dettagli.
+
+---
+
+## 📋 Changelog
+
+
+### Version v1.20251130.
+
+- Configurazione persistente (JSON)
+- Supporto file video come sorgente stream
+- Selezione sorgente per MJPG e RTSP indipendenti
+- Riavvio stream singoli (MJPG/RTSP)
+- Riavvio completo servizio stream-manager
+
+**Bug Fix:**
+- Risolto problema path hardcoded con username 'pi'
+- Risolto caricamento configurazione al boot
+
+
+### Version v1.20251128 (Rilascio Iniziale).
+
+**Funzionalità:**
+- Streaming MJPEG su HTTP (mjpg-streamer)
+- Streaming RTSP con codec H.264 (FFmpeg + MediaMTX)
+- Interfaccia web
+- Autenticazione con login (username/password)
+- Dashboard con monitoraggio sistema (CPU, RAM, temperatura)
+- Gestione dispositivi video USB (compatibili UVC)
+- Avvio/Stop stream da interfaccia web
+- Sistema di autenticazione con password hash (SHA-256)
+
+**Configurazione:**
+- Avvio automatico configurabile per stream
+- Gestione porte personalizzabili
+- Parametri video regolabili (risoluzione, framerate, qualità, bitrate)
+- Supporto username dinamici (non solo 'pi')
+
 
 ---
 **Autore:** Tommaso  
