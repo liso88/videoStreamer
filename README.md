@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-red.svg)](https://www.raspberrypi.org/)
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://www.python.org/)
 
-Trasforma il tuo Raspberry Pi Zero 2W in un potente convertitore **Video Analogico → Camera IP** con interfaccia web completa per la gestione degli stream.
+Trasforma il tuo Raspberry Pi Zero 2W in un convertitore **Video Analogico → Camera IP** con interfaccia web completa per la gestione degli stream.
 
 
 ## Caratteristiche Principali
