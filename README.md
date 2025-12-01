@@ -6,30 +6,28 @@
 
 Trasforma il tuo Raspberry Pi Zero 2W in un potente convertitore **Video Analogico → Camera IP** con interfaccia web completa per la gestione degli stream.
 
-![Dashboard](https://via.placeholder.com/800x400/667eea/ffffff?text=Stream+Manager+Dashboard)
 
-## ✨ Caratteristiche Principali
+## Caratteristiche Principali
 
-- 🎬 **Dual Streaming**: MJPEG (HTTP) e RTSP (H.264) simultanei o indipendenti
-- 🖥️ **Interfaccia Web**: Dashboard moderna e responsive per gestione completa
-- 📹 **Multi-Source**: Supporto per dispositivi video USB e file video in loop
-- 🔐 **Sicurezza**: Autenticazione integrata con gestione password
-- 🚀 **Avvio Automatico**: Configurazione persistente con boot automatico
-- 📊 **Monitoraggio**: CPU, memoria e temperatura in tempo reale
-- 🎞️ **Video Loop**: Carica video locali per streaming continuo
-- 🔄 **Auto-restart**: Riavvio stream e servizi dall'interfaccia web
+- **Dual Streaming**: MJPEG (HTTP) e RTSP (H.264) simultanei o indipendenti
+- **Interfaccia Web**: Dashboard moderna e responsive per gestione completa
+- **Multi-Source**: Supporto per dispositivi video USB e file video in loop
+- **Sicurezza**: Autenticazione integrata con gestione password
+- **Avvio Automatico**: Configurazione persistente con boot automatico
+- **Monitoraggio**: CPU, memoria e temperatura in tempo reale
+- **Video Loop**: Carica video locali per streaming continuo
+- **Auto-restart**: Riavvio stream e servizi dall'interfaccia web
 
 ## 📋 Requisiti Hardware
 
 | Componente | Specifiche |
 |------------|------------|
 | **Raspberry Pi** | Zero 2W (o superiore) |
-| **Adattatore Video** | RCA/Composito to USB (driver UVC) |
+| **Adattatore Video** | RCA/Composito to USB (driver UVC)  - oppure webcam |
 | **MicroSD** | 16GB minimo, 32GB consigliata (Classe 10) |
-| **Alimentatore** | 5V 2.5A ufficiale Raspberry Pi |
 | **Connettività** | WiFi integrato o adattatore USB-Ethernet |
 
-## 🚀 Installazione Rapida
+## Installazione Rapida
 
 ### 1. Prepara il Raspberry Pi
 
@@ -44,23 +42,22 @@ Trasforma il tuo Raspberry Pi Zero 2W in un potente convertitore **Video Analogi
 ### 2. Clona il Repository
 
 ```bash
-git clone https://github.com/tuousername/raspberry-stream-manager.git
-cd raspberry-stream-manager
+git clone https://github.com/liso88/videoStreamer.git
 ```
 
 ### 3. Esegui l'Installazione Automatica
 
 ```bash
-chmod +x install.sh
-./install.sh
+chmod +x auto_install.sh
+./auto_install.sh
 ```
 
 L'installazione richiede circa **10-15 minuti** e configura automaticamente:
-- ✅ mjpg-streamer
-- ✅ FFmpeg
-- ✅ MediaMTX (server RTSP)
-- ✅ Flask e dipendenze Python
-- ✅ Servizi systemd per avvio automatico
+- mjpg-streamer
+- FFmpeg
+- MediaMTX (server RTSP)
+- Flask e dipendenze Python
+- Servizi systemd per avvio automatico
 
 ### 4. Accedi all'Interfaccia Web
 
@@ -73,13 +70,11 @@ http://[IP_RASPBERRY]:5000
 - Username: `admin`
 - Password: `admin`
 
-⚠️ **IMPORTANTE**: Cambia la password immediatamente dopo il primo accesso!
+ **IMPORTANTE**: Cambia la password immediatamente dopo il primo accesso!
 
-## 📖 Guida Completa
 
-Per istruzioni dettagliate, consultare la [Documentazione Completa](DOCUMENTATION.md).
 
-## 🎯 Configurazioni Consigliate
+## Configurazioni Consigliate
 
 ### Configurazione Leggera (Consigliata per Pi Zero 2W)
 ```yaml
@@ -112,13 +107,6 @@ Risoluzione: 640x480
 Framerate: 25 fps
 ```
 
-## 🔧 Gestione Stream
-
-### Da Interfaccia Web
-- **▶ Avvia**: Avvia lo streaming
-- **⏹ Ferma**: Ferma lo streaming
-- **💾 Salva Config**: Salva configurazione e autostart
-- **🔄 Riavvia**: Riavvia stream o servizio completo
 
 ### Da Terminale
 
@@ -139,7 +127,7 @@ sudo systemctl stop stream-manager
 sudo systemctl start stream-manager
 ```
 
-## 🌐 Accesso agli Stream
+## Accesso agli Stream
 
 ### MJPEG Stream (HTTP)
 ```
@@ -158,7 +146,7 @@ URL RTSP: rtsp://[IP]:8554/video
 vlc rtsp://192.168.1.100:8554/video
 ```
 
-## 🏠 Integrazione Home Assistant
+## Integrazione Home Assistant
 
 ### Camera MJPEG
 ```yaml
@@ -177,19 +165,7 @@ camera:
     input: rtsp://192.168.1.100:8554/video
 ```
 
-## 🎬 Funzionalità Video Loop
-
-Carica video locali per streaming continuo - ideale per demo, test o contenuti pre-registrati.
-
-### Formati Supportati
-- MP4, AVI, MKV, MOV, MPG, MPEG
-
-### Utilizzo
-1. Accedi all'interfaccia web
-2. Seleziona "🎥 File Video (Loop)"
-3. Clicca "📤 Carica Video"
-4. Seleziona il video dalla lista
-5. Avvia lo stream
+## Funzionalità Video Loop
 
 ### Da Terminale
 ```bash
@@ -205,7 +181,7 @@ ffmpeg -f lavfi -i testsrc=duration=10:size=640x480:rate=25 \
        ~/stream_manager/videos/test_pattern.mp4
 ```
 
-## 🔐 Sicurezza
+## Sicurezza
 
 ### Cambio Password
 
@@ -233,14 +209,7 @@ EOF
 sudo systemctl restart stream-manager
 ```
 
-### Raccomandazioni
-- ✅ Password di almeno 12 caratteri
-- ✅ Mix maiuscole, minuscole, numeri, simboli
-- ✅ Backup del file `stream_auth.json`
-- ❌ Non esporre direttamente su Internet senza VPN
-- ❌ Non disabilitare l'autenticazione
-
-## 🐛 Risoluzione Problemi
+## Risoluzione Problemi
 
 ### Interfaccia Web Non Risponde
 ```bash
@@ -278,7 +247,7 @@ dmesg | grep video
 
 Per altri problemi, consulta la [Guida Completa](DOCUMENTATION.md#risoluzione-problemi).
 
-## 📊 Monitoraggio Sistema
+## Monitoraggio Sistema
 
 L'interfaccia web mostra in tempo reale:
 - **CPU**: Utilizzo processore (%)
@@ -286,13 +255,8 @@ L'interfaccia web mostra in tempo reale:
 - **Temperatura**: Temperatura CPU (°C)
 - **Stato Stream**: In esecuzione / Fermo
 
-### Alert Temperature
-- 🟢 < 60°C: Normale
-- 🟡 60-70°C: Attenzione
-- 🟠 70-80°C: Elevata
-- 🔴 > 80°C: Critica (aggiungi dissipatore)
 
-## 💾 Backup e Ripristino
+## Backup e Ripristino
 
 ### Backup Configurazione
 ```bash
@@ -321,43 +285,9 @@ scp backup/*.json user@raspberry:~/
 ssh user@raspberry "sudo systemctl restart stream-manager"
 ```
 
-## 🤝 Contribuire
-
-I contributi sono benvenuti! Per favore:
-
-1. Fork il repository
-2. Crea un branch per la tua feature (`git checkout -b feature/AmazingFeature`)
-3. Commit le modifiche (`git commit -m 'Add some AmazingFeature'`)
-4. Push al branch (`git push origin feature/AmazingFeature`)
-5. Apri una Pull Request
-
-## 📝 Licenza
+## Licenza
 
 Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE) per dettagli.
-
-## 🙏 Ringraziamenti
-
-- [mjpg-streamer](https://github.com/jacksonliam/mjpg-streamer) - Streaming MJPEG
-- [MediaMTX](https://github.com/bluenviron/mediamtx) - Server RTSP/RTMP
-- [FFmpeg](https://ffmpeg.org/) - Conversione e processing video
-- [Flask](https://flask.palletsprojects.com/) - Framework web Python
-
-## 📞 Supporto
-
-- **Issues**: [GitHub Issues](https://github.com/tuousername/raspberry-stream-manager/issues)
-- **Documentazione**: [Wiki](https://github.com/tuousername/raspberry-stream-manager/wiki)
-- **Forum**: [Raspberry Pi Forum](https://forums.raspberrypi.com)
-
-## 📈 Roadmap
-
-- [ ] Supporto registrazione video schedulata
-- [ ] Motion detection integrato
-- [ ] Supporto multiple telecamere
-- [ ] Integrazione MQTT
-- [ ] App mobile companion
-- [ ] Supporto H.265/HEVC
-- [ ] Timeline playback video registrati
-- [ ] Cloud storage integration
 
 ---
 
@@ -479,52 +409,6 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 - ⚠️ **Cambiarle immediatamente dopo il primo accesso!**
 
 ---
-
-### 📝 Note di Versione
-
-**Testato su:**
-- ✅ Raspberry Pi Zero 2W
-- ✅ Raspberry Pi 3B+
-- ✅ Raspberry Pi 4B
-- ✅ Raspberry Pi OS Lite 64-bit (Bookworm)
-
-**Browser Supportati:**
-- ✅ Chrome/Chromium 90+
-- ✅ Firefox 88+
-- ✅ Safari 14+
-- ✅ Edge 90+
-
-**Adattatori Video Testati:**
-- ✅ EasyCAP USB 2.0
-- ✅ Elgato Video Capture
-- ✅ Generic UVC Video Adapter
-- ⚠️ Verificare compatibilità driver UVC Linux
-
----
-
-### 🔜 Prossime Versioni
-
-**v1.1 (Pianificata)**
-- [ ] Registrazione video manuale
-- [ ] Snapshot programmati
-- [ ] Notifiche email/telegram
-- [ ] Gestione utenti multipli
-- [ ] API REST documentata
-
-**v1.2 (Pianificata)**
-- [ ] Motion detection
-- [ ] Zone detection configurabili
-- [ ] Timeline eventi
-- [ ] Integrazione cloud storage
-
-**v2.0 (Futura)**
-- [ ] Supporto multiple telecamere
-- [ ] Dashboard multi-stream
-- [ ] Recording schedulato
-- [ ] App mobile iOS/Android
-
----
-
 **Autore:** Tommaso  
 **Data Rilascio:** 30 Novembre 2024  
 **Versione:** 1.0 (Tommaso v1.20251130)
