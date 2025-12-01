@@ -1,4 +1,4 @@
-# 🎥 Raspberry Pi Zero 2W - Video Streaming Manager
+# Raspberry Pi Zero 2W - Video Streaming Manager
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-red.svg)](https://www.raspberrypi.org/)
@@ -327,9 +327,4 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 - Parametri video regolabili (risoluzione, framerate, qualità, bitrate)
 - Supporto username dinamici (non solo 'pi')
 
-
----
-**Autore:** Tommaso  
-**Data Rilascio:** 30 Novembre 2024  
-**Versione:** 1.0 (Tommaso v1.20251130)
 
