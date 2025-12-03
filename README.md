@@ -140,11 +140,31 @@ Interfaccia:        http://[IP]:8080
 ```
 URL RTSP: rtsp://[IP]:8554/video
 ```
+**Con autenticazione (abilitata di default):**
+```
+URL RTSP autenticato: rtsp://stream:stream@[IP]:8554/video
+```
 
 **Visualizza con VLC:**
 ```bash
 vlc rtsp://192.168.1.100:8554/video
 ```
+
+**Visualizza con VLC:**
+
+```bash
+
+# Con autenticazione
+
+vlc rtsp://stream:stream@192.168.1.100:8554/video
+
+
+# Oppure VLC richiederà le credenziali automaticamente
+
+vlc rtsp://192.168.1.100:8554/video
+
+```
+
 
 ## Integrazione
 
@@ -295,6 +315,12 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 
 ## 📋 Changelog
 
+### Version  v1.20251203 - Security Update 
+
+Autenticazione stream MJPEG con HTTP Basic
+Autenticazione stream RTSP con MediaMTX
+Gestione credenziali dall'interfaccia web
+Protezione abilitata di default
 
 ### Version v1.20251130.
 
