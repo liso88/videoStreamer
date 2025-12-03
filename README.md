@@ -307,6 +307,55 @@ ssh user@raspberry "sudo systemctl restart stream-manager"
 - Password: `admin`
 - ⚠️ **Cambiarle immediatamente dopo il primo accesso!**
 
+
+## Mettere su porta 80
+
+Configura Nginx come reverse proxy su porta 80
+
+Crea un nuovo file di configurazione, ad esempio:
+
+sudo nano /etc/nginx/sites-available/stream-manager
+
+
+Metti dentro:
+
+server {
+    listen 80;
+    listen [::]:80;
+
+    server_name _;
+
+    # Se vuoi servire qualcosa tipo /, puntiamo a Flask
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+
+Salva e chiudi.
+
+Poi abilita il sito e disabilita il default (opzionale ma consigliato):
+
+sudo ln -s /etc/nginx/sites-available/stream-manager /etc/nginx/sites-enabled/stream-manager
+sudo rm /etc/nginx/sites-enabled/default  # se non ti serve
+
+
+Controlla che la configurazione sia ok:
+
+sudo nginx -t
+
+
+Se è tutto “OK”, ricarica Nginx:
+
+sudo systemctl reload nginx
+
+
+
 ## Licenza
 
 Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE) per dettagli.
