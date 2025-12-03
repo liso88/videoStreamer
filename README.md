@@ -366,10 +366,10 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 
 ### Version  v1.20251203 - Security Update 
 
-Autenticazione stream MJPEG con HTTP Basic
-Autenticazione stream RTSP con MediaMTX
-Gestione credenziali dall'interfaccia web
-Protezione abilitata di default
+- Autenticazione stream MJPEG con HTTP Basic
+- Autenticazione stream RTSP con MediaMTX
+- Gestione credenziali dall'interfaccia web
+- Protezione abilitata di default
 
 ### Version v1.20251130.
 
@@ -378,8 +378,6 @@ Protezione abilitata di default
 - Selezione sorgente per MJPG e RTSP indipendenti
 - Riavvio stream singoli (MJPG/RTSP)
 - Riavvio completo servizio stream-manager
-
-**Bug Fix:**
 - Risolto problema path hardcoded con username 'pi'
 - Risolto caricamento configurazione al boot
 
