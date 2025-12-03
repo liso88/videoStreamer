@@ -305,7 +305,7 @@ ssh user@raspberry "sudo systemctl restart stream-manager"
 **Credenziali Default:**
 - Username: `admin`
 - Password: `admin`
-- ⚠️ **Cambiarle immediatamente dopo il primo accesso!**
+- **Cambiarle immediatamente dopo il primo accesso!**
 
 
 ## Mettere su porta 80
