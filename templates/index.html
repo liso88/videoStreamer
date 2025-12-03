@@ -37,6 +37,10 @@
             color: #666;
             font-size: 14px;
         }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
         .config-info-box {
             margin-top: 10px;
             padding: 10px 12px;
@@ -70,10 +74,23 @@
             cursor: pointer;
             text-decoration: none;
             display: inline-block;
-            margin-left: 10px;
         }
         .btn-settings:hover {
             background: #7c3aed;
+        }
+        .btn-restart {
+            padding: 8px 16px;
+            background: #f59e0b;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-restart:hover {
+            background: #d97706;
         }
         .system-info {
             display: flex;
@@ -194,6 +211,7 @@
             display: flex;
             gap: 10px;
             margin-top: 20px;
+            flex-wrap: wrap;
         }
         button {
             padding: 12px 25px;
@@ -219,6 +237,11 @@
             color: white;
         }
         .btn-save:hover { background: #5568d3; }
+        .btn-restart-service {
+            background: #f59e0b;
+            color: white;
+        }
+        .btn-restart-service:hover { background: #d97706; }
         .stream-preview {
             margin-top: 20px;
             padding: 15px;
@@ -247,6 +270,7 @@
         }
         .notification.success { background: #10b981; }
         .notification.error { background: #ef4444; }
+        .notification.warning { background: #f59e0b; }
         .modal {
             display: none;
             position: fixed;
@@ -284,6 +308,20 @@
         .close:hover {
             color: #000;
         }
+        .auth-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .auth-box code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -296,13 +334,15 @@
                     <h1>🎥 Raspberry Pi Stream Manager</h1>
                     <p class="header-subtitle">Gestisci i tuoi stream video in modo semplice</p>
                 </div>
-                <div>
+                <div class="header-buttons">
+                    <button class="btn-restart" onclick="restartService()" title="Riavvia il servizio stream-manager">
+                        🔄 Riavvia Servizio
+                    </button>
                     <a href="#" class="btn-settings" onclick="openSettingsModal(); return false;">⚙️ Impostazioni</a>
                     <a href="/logout" class="btn-logout">🚪 Esci</a>
                 </div>
             </div>
 
-            <!-- INFO: la pagina carica la configurazione corrente -->
             <div class="config-info-box" id="config-info">
                 Tommaso v1.20251130.
             </div>
@@ -397,16 +437,41 @@
                 </div>
 
                 <div class="form-group">
-                    <label style="display: flex; align-items: center, gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 10px;">
                         <input type="checkbox" name="autostart" id="mjpg-autostart" style="width: auto;">
                         <span>Avvio automatico al boot del Raspberry</span>
                     </label>
+                </div>
+
+                <!-- Autenticazione MJPG -->
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <input type="checkbox" name="auth_enabled" id="mjpg-auth-enabled" style="width: auto;" checked>
+                        <strong>🔐 Proteggi stream con password</strong>
+                    </label>
+                    
+                    <div id="mjpg-auth-fields">
+                        <div class="form-row" style="margin-top: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Username Stream</label>
+                                <input type="text" name="auth_username" id="mjpg-auth-username" value="stream" placeholder="Username per accesso stream">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Password Stream</label>
+                                <input type="password" name="auth_password" id="mjpg-auth-password" value="stream" placeholder="Password per accesso stream">
+                            </div>
+                        </div>
+                        <p style="font-size: 12px; color: #856404; margin-top: 10px;">
+                            ℹ️ Gli utenti dovranno inserire queste credenziali per visualizzare lo stream MJPG
+                        </p>
+                    </div>
                 </div>
 
                 <div class="button-group">
                     <button type="button" class="btn-start" onclick="startMJPG()">▶ Avvia</button>
                     <button type="button" class="btn-stop" onclick="stopMJPG()">⏹ Ferma</button>
                     <button type="button" class="btn-save" onclick="saveMJPGConfig()">💾 Salva Config</button>
+                    <button type="button" class="btn-restart-service" onclick="restartMJPG()">🔄 Riavvia MJPG</button>
                 </div>
             </form>
 
@@ -501,10 +566,35 @@
                     </label>
                 </div>
 
+                <!-- Autenticazione RTSP -->
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <input type="checkbox" name="auth_enabled" id="rtsp-auth-enabled" style="width: auto;" checked>
+                        <strong>🔐 Proteggi stream con password</strong>
+                    </label>
+                    
+                    <div id="rtsp-auth-fields">
+                        <div class="form-row" style="margin-top: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Username Stream</label>
+                                <input type="text" name="auth_username" id="rtsp-auth-username" value="stream" placeholder="Username per accesso stream">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Password Stream</label>
+                                <input type="password" name="auth_password" id="rtsp-auth-password" value="stream" placeholder="Password per accesso stream">
+                            </div>
+                        </div>
+                        <p style="font-size: 12px; color: #856404; margin-top: 10px;">
+                            ℹ️ URL con autenticazione: <code>rtsp://username:password@[IP]:8554/video</code>
+                        </p>
+                    </div>
+                </div>
+
                 <div class="button-group">
                     <button type="button" class="btn-start" onclick="startRTSP()">▶ Avvia</button>
                     <button type="button" class="btn-stop" onclick="stopRTSP()">⏹ Ferma</button>
                     <button type="button" class="btn-save" onclick="saveRTSPConfig()">💾 Salva Config</button>
+                    <button type="button" class="btn-restart-service" onclick="restartRTSP()">🔄 Riavvia RTSP</button>
                 </div>
             </form>
 
@@ -557,6 +647,18 @@
     </div>
 
     <script>
+        // Gestione visibilità campi autenticazione MJPG
+        document.getElementById('mjpg-auth-enabled').addEventListener('change', function() {
+            const fields = document.getElementById('mjpg-auth-fields');
+            fields.style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Gestione visibilità campi autenticazione RTSP
+        document.getElementById('rtsp-auth-enabled').addEventListener('change', function() {
+            const fields = document.getElementById('rtsp-auth-fields');
+            fields.style.display = this.checked ? 'block' : 'none';
+        });
+
         // Gestione sorgente video MJPG
         document.querySelectorAll('input[name="mjpg-source"]').forEach(radio => {
             radio.addEventListener('change', function() {
@@ -598,42 +700,40 @@
         });
 
         // Carica lista video
-		function loadVideoList(type, selectedPath = null) {
-			fetch('/api/videos/list')
-				.then(r => r.json())
-				.then(data => {
-					const select = document.getElementById(`${type}-video-file`);
-					const list = document.getElementById(`${type}-video-list`);
-					
-					// Aggiorna select
-					select.innerHTML = '<option value="">Seleziona un video...</option>';
-					data.videos.forEach(video => {
-						const option = document.createElement('option');
-						option.value = video.path;
-						option.textContent = video.name;
-						select.appendChild(option);
-					});
+        function loadVideoList(type, selectedPath = null) {
+            fetch('/api/videos/list')
+                .then(r => r.json())
+                .then(data => {
+                    const select = document.getElementById(`${type}-video-file`);
+                    const list = document.getElementById(`${type}-video-list`);
+                    
+                    // Aggiorna select
+                    select.innerHTML = '<option value="">Seleziona un video...</option>';
+                    data.videos.forEach(video => {
+                        const option = document.createElement('option');
+                        option.value = video.path;
+                        option.textContent = video.name;
+                        select.appendChild(option);
+                    });
 
-					// Se ho un path salvato, selezionalo
-					if (selectedPath) {
-						select.value = selectedPath;
-					}
-					
-					// Aggiorna lista
-					list.innerHTML = '';
-					data.videos.forEach(video => {
-						const item = document.createElement('div');
-						item.className = 'video-item';
-						item.innerHTML = `
-							<span>🎬 ${video.name} (${video.size})</span>
-							<button onclick="deleteVideo('${video.name}')" style="background:#ef4444;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">🗑️</button>
-						`;
-						list.appendChild(item);
-					});
-				});
-		}
-
-
+                    // Se ho un path salvato, selezionalo
+                    if (selectedPath) {
+                        select.value = selectedPath;
+                    }
+                    
+                    // Aggiorna lista
+                    list.innerHTML = '';
+                    data.videos.forEach(video => {
+                        const item = document.createElement('div');
+                        item.className = 'video-item';
+                        item.innerHTML = `
+                            <span>🎬 ${video.name} (${video.size})</span>
+                            <button onclick="deleteVideo('${video.name}')" style="background:#ef4444;color:white;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;">🗑️</button>
+                        `;
+                        list.appendChild(item);
+                    });
+                });
+        }
 
         // Upload video
         function uploadVideo(type) {
@@ -687,6 +787,50 @@
             });
         }
 
+        // Riavvia il servizio stream-manager
+        function restartService() {
+            if (!confirm('Riavviare il servizio stream-manager? Questo fermerà temporaneamente tutti gli stream.')) return;
+            
+            showNotification('Riavvio servizio in corso...', 'warning');
+            
+            fetch('/api/service/restart', {
+                method: 'POST'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Servizio riavviato con successo! Ricarica la pagina tra 5 secondi...', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000);
+                } else {
+                    showNotification('Errore nel riavvio: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            })
+            .catch(err => {
+                showNotification('Servizio in riavvio, ricarica la pagina tra qualche secondo', 'warning');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 5000);
+            });
+        }
+
+        // Riavvia solo MJPG
+        function restartMJPG() {
+            stopMJPG();
+            setTimeout(() => {
+                startMJPG();
+            }, 1000);
+        }
+
+        // Riavvia solo RTSP
+        function restartRTSP() {
+            stopRTSP();
+            setTimeout(() => {
+                startRTSP();
+            }, 1000);
+        }
+
         // Aggiorna lo stato ogni 2 secondi
         setInterval(updateStatus, 2000);
         updateStatus();
@@ -738,6 +882,9 @@
             const sourceType = document.querySelector('input[name="mjpg-source"]:checked').value;
             data.append('source_type', sourceType);
 
+            // Il checkbox viene automaticamente inviato dal form
+            // Non serve aggiungere manualmente se usiamo FormData dal form completo
+
             fetch('/api/mjpg/start', {
                 method: 'POST',
                 body: data
@@ -770,6 +917,8 @@
             const sourceType = document.querySelector('input[name="mjpg-source"]:checked').value;
             data.append('source_type', sourceType);
 
+            // Il FormData prende automaticamente tutti i campi del form inclusi i checkbox
+
             fetch('/api/mjpg/save', {
                 method: 'POST',
                 body: data
@@ -787,6 +936,8 @@
             // Aggiungi tipo sorgente
             const sourceType = document.querySelector('input[name="rtsp-source"]:checked').value;
             data.append('source_type', sourceType);
+
+            // Il FormData prende automaticamente tutti i campi del form
 
             fetch('/api/rtsp/start', {
                 method: 'POST',
@@ -819,6 +970,8 @@
             // Aggiungi tipo sorgente
             const sourceType = document.querySelector('input[name="rtsp-source"]:checked').value;
             data.append('source_type', sourceType);
+
+            // Il FormData prende automaticamente tutti i campi del form
 
             fetch('/api/rtsp/save', {
                 method: 'POST',
@@ -868,66 +1021,75 @@
         }
 
         // Carica configurazione al caricamento pagina
-		// Carica configurazione al caricamento pagina
-		window.onload = function() {
-			fetch('/api/config')
-				.then(r => r.json())
-				.then(config => {
-					// Popola form MJPG
-					const mjpgForm = document.getElementById('mjpg-form');
-					mjpgForm.elements['device'].value = config.mjpg.device;
-					mjpgForm.elements['resolution'].value = config.mjpg.resolution;
-					mjpgForm.elements['framerate'].value = config.mjpg.framerate;
-					mjpgForm.elements['quality'].value = config.mjpg.quality;
-					mjpgForm.elements['port'].value = config.mjpg.port;
-					document.getElementById('mjpg-autostart').checked = config.mjpg.autostart || false;
+        window.onload = function() {
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(config => {
+                    // Popola form MJPG
+                    const mjpgForm = document.getElementById('mjpg-form');
+                    mjpgForm.elements['device'].value = config.mjpg.device || '/dev/video0';
+                    mjpgForm.elements['resolution'].value = config.mjpg.resolution || '640x480';
+                    mjpgForm.elements['framerate'].value = config.mjpg.framerate || 15;
+                    mjpgForm.elements['quality'].value = config.mjpg.quality || 85;
+                    mjpgForm.elements['port'].value = config.mjpg.port || 8080;
+                    document.getElementById('mjpg-autostart').checked = config.mjpg.autostart || false;
 
-					// Gestione sorgente MJPG
-					const mjpgSource = config.mjpg.source_type || 'device';
-					if (mjpgSource === 'video') {
-						document.getElementById('mjpg-source-video').checked = true;
-						document.getElementById('mjpg-device-group').style.display = 'none';
-						document.getElementById('mjpg-video-group').style.display = 'block';
-						document.getElementById('mjpg-upload-section').style.display = 'block';
+                    // Carica impostazioni autenticazione MJPG
+                    const mjpgAuthEnabled = config.mjpg.auth_enabled !== false; // Default true
+                    document.getElementById('mjpg-auth-enabled').checked = mjpgAuthEnabled;
+                    document.getElementById('mjpg-auth-fields').style.display = mjpgAuthEnabled ? 'block' : 'none';
+                    document.getElementById('mjpg-auth-username').value = config.mjpg.auth_username || 'stream';
+                    document.getElementById('mjpg-auth-password').value = config.mjpg.auth_password || 'stream';
 
-						const videoPath = (config.mjpg.video_path || '');
-						loadVideoList('mjpg', videoPath);
-					} else {
-						document.getElementById('mjpg-source-device').checked = true;
-						document.getElementById('mjpg-device-group').style.display = 'block';
-						document.getElementById('mjpg-video-group').style.display = 'none';
-						document.getElementById('mjpg-upload-section').style.display = 'none';
-					}
-					
-					// Popola form RTSP
-					const rtspForm = document.getElementById('rtsp-form');
-					rtspForm.elements['device'].value = config.rtsp.device;
-					rtspForm.elements['resolution'].value = config.rtsp.resolution;
-					rtspForm.elements['framerate'].value = config.rtsp.framerate;
-					rtspForm.elements['bitrate'].value = config.rtsp.bitrate;
-					rtspForm.elements['port'].value = config.rtsp.port;
-					document.getElementById('rtsp-autostart').checked = config.rtsp.autostart || false;
+                    // Gestione sorgente MJPG
+                    const mjpgSource = config.mjpg.source_type || 'device';
+                    if (mjpgSource === 'video') {
+                        document.getElementById('mjpg-source-video').checked = true;
+                        document.getElementById('mjpg-device-group').style.display = 'none';
+                        document.getElementById('mjpg-video-group').style.display = 'block';
+                        document.getElementById('mjpg-upload-section').style.display = 'block';
 
-					// Gestione sorgente RTSP
-					const rtspSource = config.rtsp.source_type || 'device';
-					if (rtspSource === 'video') {
-						document.getElementById('rtsp-source-video').checked = true;
-						document.getElementById('rtsp-device-group').style.display = 'none';
-						document.getElementById('rtsp-video-group').style.display = 'block';
-						document.getElementById('rtsp-upload-section').style.display = 'block';
+                        const videoPath = config.mjpg.video_path || '';
+                        loadVideoList('mjpg', videoPath);
+                    } else {
+                        document.getElementById('mjpg-source-device').checked = true;
+                    }
+                    
+                    // Popola form RTSP
+                    const rtspForm = document.getElementById('rtsp-form');
+                    rtspForm.elements['device'].value = config.rtsp.device || '/dev/video0';
+                    rtspForm.elements['resolution'].value = config.rtsp.resolution || '640x480';
+                    rtspForm.elements['framerate'].value = config.rtsp.framerate || 25;
+                    rtspForm.elements['bitrate'].value = config.rtsp.bitrate || '1000k';
+                    rtspForm.elements['port'].value = config.rtsp.port || 8554;
+                    document.getElementById('rtsp-autostart').checked = config.rtsp.autostart || false;
 
-						const videoPath = (config.rtsp.video_path || '');
-						loadVideoList('rtsp', videoPath);
-					} else {
-						document.getElementById('rtsp-source-device').checked = true;
-						document.getElementById('rtsp-device-group').style.display = 'block';
-						document.getElementById('rtsp-video-group').style.display = 'none';
-						document.getElementById('rtsp-upload-section').style.display = 'none';
-					}
-				});
-		};
+                    // Carica impostazioni autenticazione RTSP
+                    const rtspAuthEnabled = config.rtsp.auth_enabled !== false; // Default true
+                    document.getElementById('rtsp-auth-enabled').checked = rtspAuthEnabled;
+                    document.getElementById('rtsp-auth-fields').style.display = rtspAuthEnabled ? 'block' : 'none';
+                    document.getElementById('rtsp-auth-username').value = config.rtsp.auth_username || 'stream';
+                    document.getElementById('rtsp-auth-password').value = config.rtsp.auth_password || 'stream';
 
+                    // Gestione sorgente RTSP
+                    const rtspSource = config.rtsp.source_type || 'device';
+                    if (rtspSource === 'video') {
+                        document.getElementById('rtsp-source-video').checked = true;
+                        document.getElementById('rtsp-device-group').style.display = 'none';
+                        document.getElementById('rtsp-video-group').style.display = 'block';
+                        document.getElementById('rtsp-upload-section').style.display = 'block';
 
+                        const videoPath = config.rtsp.video_path || '';
+                        loadVideoList('rtsp', videoPath);
+                    } else {
+                        document.getElementById('rtsp-source-device').checked = true;
+                    }
+                })
+                .catch(err => {
+                    console.error('Errore caricamento configurazione:', err);
+                    showNotification('Errore nel caricamento della configurazione', 'error');
+                });
+        };
     </script>
 </body>
 </html>

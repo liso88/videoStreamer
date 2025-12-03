@@ -1,7 +1,7 @@
-#!/usr/bin/env python3
 """
 Raspberry Pi Video Streaming Manager
 Gestisce mjpg-streamer e FFmpeg/MediaMTX tramite interfaccia web
+Con autenticazione per stream MJPG e RTSP
 """
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
@@ -15,7 +15,7 @@ import secrets
 import re
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)  # Genera una chiave segreta casuale
+app.secret_key = secrets.token_hex(32)
 
 # File di configurazione (dinamici per qualsiasi utente)
 HOME_DIR = os.path.expanduser('~')
@@ -32,7 +32,10 @@ DEFAULT_CONFIG = {
         'quality': 85,
         'port': 8080,
         'autostart': True,
-        'source_type': 'device'  # 'device' o 'video'
+        'source_type': 'device',
+        'auth_enabled': True,  # Autenticazione abilitata di default
+        'auth_username': 'stream',
+        'auth_password': 'stream'  # Cambiare dopo l'installazione!
     },
     'rtsp': {
         'enabled': False,
@@ -42,7 +45,10 @@ DEFAULT_CONFIG = {
         'bitrate': '1000k',
         'port': 8554,
         'autostart': False,
-        'source_type': 'device'  # 'device' o 'video'
+        'source_type': 'device',
+        'auth_enabled': True,  # Autenticazione abilitata di default
+        'auth_username': 'stream',
+        'auth_password': 'stream'  # Cambiare dopo l'installazione!
     },
     'video': {
         'path': os.path.join(HOME_DIR, 'stream_manager', 'videos', 'demo.mp4'),
@@ -66,11 +72,10 @@ def save_config(config):
 
 
 def load_auth():
-    """Carica le credenziali di autenticazione"""
+    """Carica le credenziali di autenticazione interfaccia web"""
     if os.path.exists(AUTH_FILE):
         with open(AUTH_FILE, 'r') as f:
             return json.load(f)
-    # Credenziali di default: admin/admin
     return {
         'username': 'admin',
         'password': hashlib.sha256('admin'.encode()).hexdigest(),
@@ -106,6 +111,58 @@ def login_required(f):
     return decorated_function
 
 
+def create_htpasswd_file(username, password, filename):
+    """Crea file .htpasswd per autenticazione HTTP Basic"""
+    # Usa crypt per generare hash compatibile con Apache
+    import crypt
+    password_hash = crypt.crypt(password, crypt.mksalt(crypt.METHOD_SHA512))
+    
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    with open(filename, 'w') as f:
+        f.write(f"{username}:{password_hash}\n")
+    os.chmod(filename, 0o600)
+
+def update_mediamtx_config(rtsp_config):
+    """Aggiorna configurazione MediaMTX con autenticazione"""
+    auth_enabled = rtsp_config.get('auth_enabled', False)
+    username = rtsp_config.get('auth_username', 'stream')
+    password = rtsp_config.get('auth_password', 'stream')
+    
+    # Config base
+    config_content = f"""logLevel: info
+logDestinations: [stdout]
+
+rtspAddress: :{rtsp_config.get('port', 8554)}
+rtpAddress: :8000
+rtcpAddress: :8001
+hlsAddress: :8888
+
+"""
+    
+    if auth_enabled:
+        # NESSUNA riga "authMethod: basic" qui
+        config_content += f"""paths:
+  all:
+    publishUser: {username}
+    publishPass: {password}
+    readUser: {username}
+    readPass: {password}
+"""
+    else:
+        config_content += """paths:
+  all:
+"""
+
+    # Scrivi config temporaneo e poi copia in /etc
+    with open('/tmp/mediamtx.yml', 'w') as f:
+        f.write(config_content)
+    
+    subprocess.run(
+        ['sudo', 'cp', '/tmp/mediamtx.yml', '/etc/mediamtx/mediamtx.yml'],
+        check=True
+    )
+
+
 def get_video_files():
     """Ottiene la lista dei video disponibili"""
     video_dir = os.path.join(HOME_DIR, 'stream_manager', 'videos')
@@ -131,20 +188,33 @@ def is_process_running(pattern):
             pass
     return False
 
-
 def start_mjpg_streamer(config):
-    """Avvia mjpg-streamer"""
+    """Avvia mjpg-streamer con autenticazione opzionale"""
     source_type = config.get('source_type', 'device')
+    auth_enabled = config.get('auth_enabled', False)
+    
+    print(f"[MJPG] Configurazione: source={source_type}, auth={auth_enabled}")
+    
+    # Prepara autenticazione se abilitata
+    auth_params = ''
+    if auth_enabled:
+        username = config.get('auth_username', 'stream')
+        password = config.get('auth_password', 'stream')
+        auth_params = f'-c {username}:{password}'
+        print(f"[MJPG] Autenticazione attiva: {username}:****")
 
     if source_type == 'video':
-        # Sorgente = file video (specifico per MJPG)
+        # Sorgente = file video
         full_config = load_config()
         video_path = full_config.get('mjpg', {}).get('video_path', '')
 
         if not os.path.exists(video_path):
-            raise Exception(f"Video non trovato: {video_path}")
+            error_msg = f"Video non trovato: {video_path}"
+            print(f"[MJPG] ❌ {error_msg}")
+            raise Exception(error_msg)
 
-        # Cartella per i frame JPG
+        print(f"[MJPG] Usando video: {video_path}")
+        
         frames_dir = '/tmp/mjpg_frames'
         os.makedirs(frames_dir, exist_ok=True)
 
@@ -156,10 +226,9 @@ def start_mjpg_streamer(config):
                 except:
                     pass
 
-        # Avvia FFmpeg che genera JPEG nella cartella
         fps = config.get('framerate', 15)
         quality = config.get('quality', 85)
-        qscale = max(1, min(31, quality // 3))  # 1=meglio, 31=peggio
+        qscale = max(1, min(31, quality // 3))
 
         ffmpeg_cmd = [
             'ffmpeg',
@@ -169,46 +238,84 @@ def start_mjpg_streamer(config):
             '-q:v', str(qscale),
             os.path.join(frames_dir, 'frame_%06d.jpg')
         ]
-        subprocess.Popen(
-            ffmpeg_cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        
+        print(f"[MJPG] Avvio FFmpeg: {' '.join(ffmpeg_cmd)}")
+        subprocess.Popen(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        # Avvia mjpg-streamer che guarda la cartella di JPG
+        # input_file.so: specifica la cartella dei frame
+        input_params = f'input_file.so -folder {frames_dir} -d 0 -r'
+        output_params = f'output_http.so -p {config["port"]} -n'
+        
+        if auth_params:
+            output_params += f' {auth_params}'
+            
         mjpg_cmd = [
             '/usr/local/bin/mjpg_streamer',
-            '-i', f'input_file.so -f {frames_dir} -d 0 -r',
-            '-o', f"output_http.so -p {config['port']} -n"
+            '-i', input_params,
+            '-o', output_params
         ]
     else:
         # Sorgente = dispositivo video USB
+        device = config['device']
+        
+        if not os.path.exists(device):
+            error_msg = f"Dispositivo non trovato: {device}"
+            print(f"[MJPG] ❌ {error_msg}")
+            raise Exception(error_msg)
+            
+        print(f"[MJPG] Usando dispositivo: {device}")
+        
+        # input_uvc.so usa -d per device, -r per resolution, -f per framerate, -q per quality
+        input_params = f'input_uvc.so -d {device} -r {config["resolution"]} -f {config["framerate"]} -q {config["quality"]}'
+        output_params = f'output_http.so -p {config["port"]} -n'
+        
+        if auth_params:
+            output_params += f' {auth_params}'
+        
         mjpg_cmd = [
             '/usr/local/bin/mjpg_streamer',
-            '-i', (
-                f"input_uvc.so -d {config['device']} -r {config['resolution']} "
-                f"-f {config['framerate']} -q {config['quality']}"
-            ),
-            '-o', f"output_http.so -p {config['port']} -n"
+            '-i', input_params,
+            '-o', output_params
         ]
 
-    subprocess.Popen(
-        mjpg_cmd,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-    return True
-
+    # Log del comando completo per debug (nascondi password nella stampa)
+    cmd_display = ' '.join(mjpg_cmd)
+    if auth_params:
+        cmd_display = cmd_display.replace(auth_params, '-c ****:****')
+    print(f"[MJPG] Comando completo: {cmd_display}")
+    
+    try:
+        # ⚠️ Qui la differenza importante: niente shell=True, e passo la LISTA
+        process = subprocess.Popen(
+            mjpg_cmd,
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
+        )
+        
+        # Attendi un attimo per verificare se si avvia
+        import time
+        time.sleep(1)
+        
+        if process.poll() is not None:
+            # Processo terminato subito, c'è un errore
+            stdout, stderr = process.communicate()
+            error_msg = stderr.decode() if stderr else "Processo terminato immediatamente"
+            print(f"[MJPG] ❌ Errore avvio: {error_msg}")
+            raise Exception(f"MJPG non si avvia: {error_msg}")
+        
+        print(f"[MJPG] ✅ Avviato con successo (PID: {process.pid})")
+        return True
+        
+    except Exception as e:
+        print(f"[MJPG] ❌ Eccezione: {str(e)}")
+        raise
 
 
 def stop_mjpg_streamer():
     """Ferma mjpg-streamer"""
-    subprocess.run(['pkill', '-f', 'mjpg_streamer'],
-                   stderr=subprocess.DEVNULL)
-    # Pulisci anche il processo FFmpeg se presente
-    subprocess.run(['pkill', '-f', 'ffmpeg.*mjpg_fifo'],
-                   shell=True, stderr=subprocess.DEVNULL)
-    # Rimuovi named pipe se esiste
+    subprocess.run(['pkill', '-f', 'mjpg_streamer'], stderr=subprocess.DEVNULL)
+    subprocess.run(['pkill', '-f', 'ffmpeg.*mjpg_fifo'], shell=True, stderr=subprocess.DEVNULL)
+    
     fifo_path = '/tmp/mjpg_fifo'
     if os.path.exists(fifo_path):
         try:
@@ -219,24 +326,70 @@ def stop_mjpg_streamer():
 
 
 def start_rtsp_stream(config):
-    """Avvia lo streaming RTSP con FFmpeg"""
-    # Prima avvia MediaMTX se non è in esecuzione
-    if not is_process_running('mediamtx'):
-        subprocess.Popen(['mediamtx', '/etc/mediamtx/mediamtx.yml'],
-                         stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL)
+    """Avvia lo streaming RTSP con FFmpeg e autenticazione"""
+    print(f"[RTSP] Configurazione: source={config.get('source_type', 'device')}, auth={config.get('auth_enabled', False)}")
+    
+    # Aggiorna configurazione MediaMTX con autenticazione
+    try:
+        update_mediamtx_config(config)
+        print("[RTSP] ✅ Configurazione MediaMTX aggiornata")
+    except Exception as e:
+        print(f"[RTSP] ❌ Errore configurazione MediaMTX: {e}")
+        raise
+    
+    # Riavvia MediaMTX per applicare la configurazione
+    print("[RTSP] Riavvio MediaMTX...")
+    result = subprocess.run(['sudo', 'systemctl', 'restart', 'mediamtx'], 
+                           capture_output=True, text=True)
+    if result.returncode != 0:
+        error_msg = f"Errore riavvio MediaMTX: {result.stderr}"
+        print(f"[RTSP] ❌ {error_msg}")
+        raise Exception(error_msg)
+    
+    # Attendi che MediaMTX si avvii
+    import time
+    print("[RTSP] Attesa avvio MediaMTX...")
+    time.sleep(3)
+    
+    # Verifica che MediaMTX sia attivo
+    result = subprocess.run(['systemctl', 'is-active', 'mediamtx'], 
+                           capture_output=True, text=True)
+    if result.stdout.strip() != 'active':
+        error_msg = "MediaMTX non si è avviato"
+        print(f"[RTSP] ❌ {error_msg}")
+        # Mostra log MediaMTX
+        log_result = subprocess.run(['sudo', 'journalctl', '-u', 'mediamtx', '-n', '10', '--no-pager'],
+                                   capture_output=True, text=True)
+        print(f"[RTSP] Log MediaMTX:\n{log_result.stdout}")
+        raise Exception(error_msg)
+    
+    print("[RTSP] ✅ MediaMTX attivo")
 
     source_type = config.get('source_type', 'device')
+    auth_enabled = config.get('auth_enabled', False)
+    username = config.get('auth_username', 'stream')
+    password = config.get('auth_password', 'stream')
+    port = config.get('port', 8554)
+    
+    # Costruisci URL RTSP con o senza autenticazione
+    if auth_enabled:
+        rtsp_url = f"rtsp://{username}:{password}@localhost:{port}/video"
+        print(f"[RTSP] URL con auth: rtsp://{username}:****@localhost:{port}/video")
+    else:
+        rtsp_url = f"rtsp://localhost:{port}/video"
+        print(f"[RTSP] URL senza auth: {rtsp_url}")
 
     if source_type == 'video':
-        # Usa video file come sorgente (specifico per RTSP)
         full_config = load_config()
         video_path = full_config.get('rtsp', {}).get('video_path', '')
 
         if not os.path.exists(video_path):
-            raise Exception(f"Video non trovato: {video_path}")
+            error_msg = f"Video non trovato: {video_path}"
+            print(f"[RTSP] ❌ {error_msg}")
+            raise Exception(error_msg)
 
-        # teniamo sempre il loop attivo
+        print(f"[RTSP] Usando video: {video_path}")
+        
         loop_option = ['-stream_loop', '-1']
 
         cmd = [
@@ -251,37 +404,65 @@ def start_rtsp_stream(config):
             '-s', config['resolution'],
             '-r', str(config['framerate']),
             '-f', 'rtsp',
-            f"rtsp://localhost:{config['port']}/video"
+            rtsp_url
         ]
     else:
-        # Usa dispositivo video USB
+        device = config['device']
+        
+        if not os.path.exists(device):
+            error_msg = f"Dispositivo non trovato: {device}"
+            print(f"[RTSP] ❌ {error_msg}")
+            raise Exception(error_msg)
+            
+        print(f"[RTSP] Usando dispositivo: {device}")
+        
         cmd = [
             'ffmpeg',
             '-f', 'v4l2',
             '-input_format', 'mjpeg',
             '-video_size', config['resolution'],
             '-framerate', str(config['framerate']),
-            '-i', config['device'],
+            '-i', device,
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
             '-tune', 'zerolatency',
             '-b:v', config['bitrate'],
             '-f', 'rtsp',
-            f"rtsp://localhost:{config['port']}/video"
+            rtsp_url
         ]
 
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL)
-    return True
-
+    # Log comando (nascondi password)
+    cmd_display = ' '.join(cmd).replace(f":{password}@", ":****@")
+    print(f"[RTSP] Comando FFmpeg: {cmd_display}")
+    
+    try:
+        process = subprocess.Popen(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
+        )
+        
+        # Attendi per verificare se si avvia
+        time.sleep(2)
+        
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            error_msg = stderr.decode() if stderr else "Processo terminato immediatamente"
+            print(f"[RTSP] ❌ Errore FFmpeg: {error_msg}")
+            raise Exception(f"FFmpeg non si avvia: {error_msg}")
+        
+        print(f"[RTSP] ✅ FFmpeg avviato con successo (PID: {process.pid})")
+        return True
+        
+    except Exception as e:
+        print(f"[RTSP] ❌ Eccezione: {str(e)}")
+        raise
 
 
 def stop_rtsp_stream():
     """Ferma lo streaming RTSP"""
-    subprocess.run(['pkill', '-f', 'ffmpeg.*rtsp'],
-                   shell=True, stderr=subprocess.DEVNULL)
-    subprocess.run(['pkill', 'mediamtx'],
-                   stderr=subprocess.DEVNULL)
+    subprocess.run(['pkill', '-f', 'ffmpeg.*rtsp'], shell=True, stderr=subprocess.DEVNULL)
+    subprocess.run(['sudo', 'systemctl', 'stop', 'mediamtx'], stderr=subprocess.DEVNULL)
     return True
 
 
@@ -313,9 +494,9 @@ def get_system_info():
     }
 
 
-# ───────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
 # ROUTES
-# ───────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
 
 @app.route('/')
 @login_required
@@ -374,7 +555,7 @@ def api_config():
 @app.route('/api/settings/save', methods=['POST'])
 @login_required
 def api_settings_save():
-    """Salva le impostazioni di autenticazione"""
+    """Salva le impostazioni di autenticazione interfaccia web"""
     try:
         auth = load_auth()
 
@@ -396,6 +577,18 @@ def api_settings_save():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/service/restart', methods=['POST'])
+@login_required
+def api_service_restart():
+    """Riavvia il servizio stream-manager"""
+    try:
+        subprocess.Popen(['sudo', 'systemctl', 'restart', 'stream-manager'],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/mjpg/start', methods=['POST'])
 @login_required
 def api_mjpg_start():
@@ -403,17 +596,22 @@ def api_mjpg_start():
     try:
         source_type = request.form.get('source_type', 'device')
         video_file = request.form.get('video_file', '')
-
+        
+        # Fix: il checkbox invia 'on' quando checked
+        auth_enabled = request.form.get('auth_enabled') == 'on'
+        
         config = {
             'device': request.form.get('device', '/dev/video0'),
             'resolution': request.form.get('resolution', '640x480'),
             'framerate': int(request.form.get('framerate', 15)),
             'quality': int(request.form.get('quality', 85)),
             'port': int(request.form.get('port', 8080)),
-            'source_type': source_type
+            'source_type': source_type,
+            'auth_enabled': auth_enabled,
+            'auth_username': request.form.get('auth_username', 'stream'),
+            'auth_password': request.form.get('auth_password', 'stream')
         }
 
-        # Se usa video file, salva il path nella sezione MJPG
         if source_type == 'video':
             full_config = load_config()
             if not video_file:
@@ -423,11 +621,7 @@ def api_mjpg_start():
                 full_config['mjpg']['video_path'] = video_file
                 save_config(full_config)
 
-
-        # Ferma eventuali istanze precedenti
         stop_mjpg_streamer()
-
-        # Avvia
         start_mjpg_streamer(config)
 
         return jsonify({'success': True})
@@ -451,6 +645,9 @@ def api_mjpg_save():
 
     source_type = request.form.get('source_type', 'device')
     video_file = request.form.get('video_file', '')
+    
+    # Fix: il checkbox invia 'on' quando checked, altrimenti non invia nulla
+    auth_enabled = request.form.get('auth_enabled') == 'on'
 
     config['mjpg'] = {
         'device': request.form.get('device', '/dev/video0'),
@@ -459,7 +656,10 @@ def api_mjpg_save():
         'quality': int(request.form.get('quality', 85)),
         'port': int(request.form.get('port', 8080)),
         'autostart': request.form.get('autostart') == 'on',
-        'source_type': source_type
+        'source_type': source_type,
+        'auth_enabled': auth_enabled,
+        'auth_username': request.form.get('auth_username', 'stream'),
+        'auth_password': request.form.get('auth_password', 'stream')
     }
 
     if source_type == 'video' and video_file:
@@ -477,6 +677,9 @@ def api_rtsp_start():
     try:
         source_type = request.form.get('source_type', 'device')
         video_file = request.form.get('video_file', '')
+        
+        # Fix: il checkbox invia 'on' quando checked
+        auth_enabled = request.form.get('auth_enabled') == 'on'
 
         config = {
             'device': request.form.get('device', '/dev/video0'),
@@ -484,11 +687,12 @@ def api_rtsp_start():
             'framerate': int(request.form.get('framerate', 25)),
             'bitrate': request.form.get('bitrate', '1000k'),
             'port': int(request.form.get('port', 8554)),
-            'source_type': source_type
+            'source_type': source_type,
+            'auth_enabled': auth_enabled,
+            'auth_username': request.form.get('auth_username', 'stream'),
+            'auth_password': request.form.get('auth_password', 'stream')
         }
 
-        # Se usa video file, aggiorna il path nella config globale
-        # Se usa video file, salva il path nella sezione RTSP
         if source_type == 'video':
             full_config = load_config()
             if not video_file:
@@ -498,11 +702,7 @@ def api_rtsp_start():
                 full_config['rtsp']['video_path'] = video_file
                 save_config(full_config)
 
-
-        # Ferma eventuali istanze precedenti
         stop_rtsp_stream()
-
-        # Avvia
         start_rtsp_stream(config)
 
         return jsonify({'success': True})
@@ -554,13 +754,11 @@ def api_videos_upload():
         if file.filename == '':
             return jsonify({'success': False, 'error': 'Nome file vuoto'})
 
-        # Verifica estensione
         allowed_extensions = {'.mp4', '.avi', '.mkv', '.mov', '.mpg', '.mpeg'}
         ext = os.path.splitext(file.filename)[1].lower()
         if ext not in allowed_extensions:
             return jsonify({'success': False, 'error': 'Formato non supportato'})
 
-        # Salva il file
         video_dir = os.path.join(HOME_DIR, 'stream_manager', 'videos')
         os.makedirs(video_dir, exist_ok=True)
 
@@ -589,7 +787,6 @@ def api_videos_delete():
         if not os.path.exists(filepath):
             return jsonify({'success': False, 'error': 'File non trovato'})
 
-        # Verifica che sia nella directory corretta (sicurezza)
         if not filepath.startswith(video_dir):
             return jsonify({'success': False, 'error': 'Percorso non valido'})
 
@@ -607,6 +804,9 @@ def api_rtsp_save():
 
     source_type = request.form.get('source_type', 'device')
     video_file = request.form.get('video_file', '')
+    
+    # Fix: il checkbox invia 'on' quando checked
+    auth_enabled = request.form.get('auth_enabled') == 'on'
 
     config['rtsp'] = {
         'device': request.form.get('device', '/dev/video0'),
@@ -615,7 +815,10 @@ def api_rtsp_save():
         'bitrate': request.form.get('bitrate', '1000k'),
         'port': int(request.form.get('port', 8554)),
         'autostart': request.form.get('autostart') == 'on',
-        'source_type': source_type
+        'source_type': source_type,
+        'auth_enabled': auth_enabled,
+        'auth_username': request.form.get('auth_username', 'stream'),
+        'auth_password': request.form.get('auth_password', 'stream')
     }
 
     if source_type == 'video' and video_file:
@@ -630,7 +833,6 @@ def autostart_streams():
     """Avvia automaticamente gli stream configurati"""
     config = load_config()
 
-    # Avvia MJPG se configurato per autostart
     if config.get('mjpg', {}).get('autostart', False):
         try:
             print("🚀 Avvio automatico MJPG Streamer...")
@@ -639,7 +841,6 @@ def autostart_streams():
         except Exception as e:
             print(f"❌ Errore avvio MJPG: {e}")
 
-    # Avvia RTSP se configurato per autostart
     if config.get('rtsp', {}).get('autostart', False):
         try:
             print("🚀 Avvio automatico RTSP Stream...")
@@ -650,11 +851,9 @@ def autostart_streams():
 
 
 if __name__ == '__main__':
-    # Crea configurazione di default se non esiste
     if not os.path.exists(CONFIG_FILE):
         save_config(DEFAULT_CONFIG)
 
-    # Crea credenziali di default se non esistono
     if not os.path.exists(AUTH_FILE):
         save_auth({
             'username': 'admin',
@@ -662,16 +861,16 @@ if __name__ == '__main__':
             'enabled': True
         })
         print("⚠️  CREDENZIALI DEFAULT ATTIVE:")
-        print("   Username: admin")
-        print("   Password: admin")
-        print("   CAMBIA LA PASSWORD DOPO IL PRIMO ACCESSO!")
+        print("   Username interfaccia web: admin")
+        print("   Password interfaccia web: admin")
+        print("   Username stream: stream")
+        print("   Password stream: stream")
+        print("   CAMBIA LE PASSWORD DOPO IL PRIMO ACCESSO!")
 
-    # Avvia stream configurati per l'autostart
     import time
     print("⏳ Attendo 5 secondi prima dell'avvio automatico...")
-    time.sleep(5)  # Attende che il sistema sia completamente avviato
+    time.sleep(5)
     autostart_streams()
 
-    # Avvia il server web
     print("🌐 Avvio server web sulla porta 5000...")
     app.run(host='0.0.0.0', port=5000, debug=False)

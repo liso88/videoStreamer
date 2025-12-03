@@ -8,7 +8,9 @@ import hashlib
 import os
 import getpass
 
-AUTH_FILE = '/home/pi/stream_manager/stream_auth.json'
+# Usa il percorso dinamico per qualsiasi utente (non hardcoded)
+HOME_DIR = os.path.expanduser('~')
+AUTH_FILE = os.path.join(HOME_DIR, 'stream_auth.json')
 
 def load_auth():
     """Carica le credenziali"""

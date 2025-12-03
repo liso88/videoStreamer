@@ -147,20 +147,32 @@ cat > ~/stream_manager/stream_config.json <<'EOF'
   "mjpg": {
     "enabled": true,
     "device": "/dev/video0",
-    "resolution": "640x480",
-    "framerate": 15,
-    "quality": 85,
+    "resolution": "320x240",
+    "framerate": 10,
+    "quality": 75,
     "port": 8080,
-    "autostart": true
+    "autostart": true,
+    "source_type": "device",
+    "auth_enabled": true,
+    "auth_username": "stream",
+    "auth_password": "stream"
   },
   "rtsp": {
     "enabled": true,
     "device": "/dev/video0",
-    "resolution": "640x480",
-    "framerate": 25,
-    "bitrate": "1000k",
+    "resolution": "320x240",
+    "framerate": 15,
+    "bitrate": "500k",
     "port": 8554,
-    "autostart": false
+    "autostart": false,
+    "source_type": "device",
+    "auth_enabled": true,
+    "auth_username": "stream",
+    "auth_password": "stream"
+  },
+  "video": {
+    "path": "",
+    "loop": true
   }
 }
 EOF
@@ -172,14 +184,16 @@ sudo systemctl enable mediamtx.service
 
 # Configura sudo per permettere il riavvio del servizio senza password
 echo "[*] Configurazione permessi sudo per riavvio servizio..."
-SUDOERS_LINE="$USER ALL=(ALL) NOPASSWD: /bin/systemctl restart stream-manager"
-if ! sudo grep -q "$SUDOERS_LINE" /etc/sudoers.d/stream-manager 2>/dev/null; then
-    echo "$SUDOERS_LINE" | sudo tee /etc/sudoers.d/stream-manager > /dev/null
-    sudo chmod 0440 /etc/sudoers.d/stream-manager
-    echo "✅ Permessi sudo configurati"
-else
-    echo "✅ Permessi sudo già configurati"
-fi
+SUDOERS_FILE="/etc/sudoers.d/stream-manager"
+sudo tee "$SUDOERS_FILE" > /dev/null <<EOF
+# Permessi per Stream Manager
+$USER ALL=(ALL) NOPASSWD: /bin/systemctl restart stream-manager
+$USER ALL=(ALL) NOPASSWD: /bin/systemctl restart mediamtx
+$USER ALL=(ALL) NOPASSWD: /bin/systemctl stop mediamtx
+$USER ALL=(ALL) NOPASSWD: /bin/cp /tmp/mediamtx.yml /etc/mediamtx/mediamtx.yml
+EOF
+sudo chmod 0440 "$SUDOERS_FILE"
+echo "✅ Permessi sudo configurati"
 
 # Avvia i servizi
 sudo systemctl start stream-manager.service
