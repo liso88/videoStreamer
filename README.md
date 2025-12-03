@@ -313,12 +313,13 @@ ssh user@raspberry "sudo systemctl restart stream-manager"
 Configura Nginx come reverse proxy su porta 80
 
 Crea un nuovo file di configurazione, ad esempio:
-
+```bash
 sudo nano /etc/nginx/sites-available/stream-manager
-
+```
 
 Metti dentro:
 
+```bash
 server {
     listen 80;
     listen [::]:80;
@@ -336,24 +337,23 @@ server {
     }
 }
 
-
+```
 Salva e chiudi.
 
 Poi abilita il sito e disabilita il default (opzionale ma consigliato):
 
+```bash
 sudo ln -s /etc/nginx/sites-available/stream-manager /etc/nginx/sites-enabled/stream-manager
 sudo rm /etc/nginx/sites-enabled/default  # se non ti serve
-
+```
 
 Controlla che la configurazione sia ok:
 
+```bash
 sudo nginx -t
 
-
-Se è tutto “OK”, ricarica Nginx:
-
 sudo systemctl reload nginx
-
+```
 
 
 ## Licenza
