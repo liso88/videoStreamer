@@ -362,7 +362,7 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 
 ---
 
-## 📋 Changelog
+## Changelog
 
 ### Version  v1.20251203 - Security Update 
 
