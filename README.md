@@ -7,6 +7,18 @@
 Trasforma il tuo Raspberry Pi Zero 2W in un convertitore **Video Analogico → Camera IP** con interfaccia web completa per la gestione degli stream.
 
 
+
+sudo nano /etc/lighttpd/lighttpd.conf
+http://10.3.141.1:8080/
+admin
+secret
+
+password WiFi RasAP  ChangeMe
+
+
+SSID: videoStreamer
+IP Hotspot: 192.168.50.1
+ 
 ## Caratteristiche Principali
 
 - **Dual Streaming**: MJPEG (HTTP) e RTSP (H.264) simultanei o indipendenti

@@ -16,11 +16,12 @@ import re
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
+app.config['MAX_CONTENT_LENGTH'] = 2000 * 1024 * 1024  # 2GB limite upload
 
-# File di configurazione (dinamici per qualsiasi utente)
-HOME_DIR = os.path.expanduser('~')
-CONFIG_FILE = os.path.join(HOME_DIR, 'stream_config.json')
-AUTH_FILE = os.path.join(HOME_DIR, 'stream_auth.json')
+# Percorsi relativi alla cartella dell'applicazione
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(APP_DIR, 'stream_config.json')
+AUTH_FILE = os.path.join(APP_DIR, 'stream_auth.json')
 
 # Configurazione di default
 DEFAULT_CONFIG = {
@@ -51,7 +52,7 @@ DEFAULT_CONFIG = {
         'auth_password': 'stream'  # Cambiare dopo l'installazione!
     },
     'video': {
-        'path': os.path.join(HOME_DIR, 'stream_manager', 'videos', 'demo.mp4'),
+        'path': os.path.join(APP_DIR, 'videos', 'demo.mp4'),
         'loop': True
     }
 }
@@ -165,7 +166,7 @@ hlsAddress: :8888
 
 def get_video_files():
     """Ottiene la lista dei video disponibili"""
-    video_dir = os.path.join(HOME_DIR, 'stream_manager', 'videos')
+    video_dir = os.path.join(APP_DIR, 'videos')
     if not os.path.exists(video_dir):
         os.makedirs(video_dir, exist_ok=True)
         return []
@@ -205,8 +206,12 @@ def start_mjpg_streamer(config):
 
     if source_type == 'video':
         # Sorgente = file video
-        full_config = load_config()
-        video_path = full_config.get('mjpg', {}).get('video_path', '')
+        video_path = config.get('video_path', '')
+        
+        if not video_path:
+            # Fallback: leggi dalla config file se non fornito
+            full_config = load_config()
+            video_path = full_config.get('mjpg', {}).get('video_path', '')
 
         if not os.path.exists(video_path):
             error_msg = f"Video non trovato: {video_path}"
@@ -398,11 +403,14 @@ def start_rtsp_stream(config):
             '-re',
             '-i', video_path,
             '-c:v', 'libx264',
-            '-preset', 'ultrafast',
+            '-preset', 'veryfast',
             '-tune', 'zerolatency',
             '-b:v', config['bitrate'],
+            '-maxrate', config['bitrate'],
+            '-bufsize', '2000k',
             '-s', config['resolution'],
             '-r', str(config['framerate']),
+            '-an',  # Disabilita audio per stabilità RTSP
             '-f', 'rtsp',
             rtsp_url
         ]
@@ -424,9 +432,12 @@ def start_rtsp_stream(config):
             '-framerate', str(config['framerate']),
             '-i', device,
             '-c:v', 'libx264',
-            '-preset', 'ultrafast',
+            '-preset', 'veryfast',
             '-tune', 'zerolatency',
             '-b:v', config['bitrate'],
+            '-maxrate', config['bitrate'],
+            '-bufsize', '2000k',
+            '-an',  # Disabilita audio
             '-f', 'rtsp',
             rtsp_url
         ]
@@ -492,6 +503,224 @@ def get_system_info():
         'memory': memory.percent,
         'temperature': temp
     }
+
+
+def get_hostname():
+    """Ottiene l'hostname attuale"""
+    try:
+        result = subprocess.run(['hostname'], capture_output=True, text=True)
+        return result.stdout.strip()
+    except:
+        return "unknown"
+
+
+def set_hostname(new_hostname):
+    """Cambia l'hostname del Raspberry Pi"""
+    try:
+        # Validazione hostname
+        if not re.match(r'^[a-z0-9-]{1,63}$', new_hostname, re.IGNORECASE):
+            raise ValueError("Hostname non valido. Usa solo lettere, numeri e trattini")
+        
+        print(f"[NETWORK] 🔄 Cambio hostname in: {new_hostname}")
+        
+        # Usa lo script helper che ha i permessi sudoers configurati
+        result = subprocess.run(
+            ['sudo', '/usr/local/bin/change_hostname.sh', new_hostname],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or "Errore sconosciuto"
+            print(f"[NETWORK] ❌ Errore: {error_msg}")
+            raise ValueError(f"Errore cambio hostname: {error_msg}")
+        
+        print(result.stdout)
+        print(f"[NETWORK] ✅ Hostname cambiato in: {new_hostname}")
+        return True
+    except Exception as e:
+        print(f"[NETWORK] ❌ Errore cambio hostname: {e}")
+        raise
+
+
+def get_network_info():
+    """Ottiene informazioni di rete (interfaccia, IP, configurazione)"""
+    try:
+        config = {}
+        
+        # Ottieni IP corrente
+        try:
+            result = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
+            ips = result.stdout.strip().split()
+            config['current_ip'] = ips[0] if ips else 'N/A'
+        except:
+            config['current_ip'] = 'N/A'
+        
+        # Leggi configurazione systemd-networkd
+        systemd_network_dir = '/etc/systemd/network/'
+        config['mode'] = 'DHCP'  # Default
+        config['interface'] = 'wlan0'  # Default
+        
+        if os.path.exists(systemd_network_dir):
+            for f in os.listdir(systemd_network_dir):
+                if f.endswith('.network'):
+                    filepath = os.path.join(systemd_network_dir, f)
+                    try:
+                        with open(filepath, 'r') as file:
+                            content = file.read()
+                            
+                        # Estrai interfaccia dal nome del file
+                        if 'static' in f:
+                            config['mode'] = 'STATIC'
+                            # Leggi i dettagli dal file
+                            for line in content.split('\n'):
+                                line = line.strip()
+                                if line.startswith('Name='):
+                                    config['interface'] = line.split('=')[1]
+                                elif line.startswith('Address='):
+                                    config['static_ip'] = line.split('=')[1]
+                                elif line.startswith('Gateway='):
+                                    config['gateway'] = line.split('=')[1]
+                                elif line.startswith('DNS='):
+                                    config['dns'] = line.split('=')[1]
+                        elif 'dhcp' in f:
+                            config['mode'] = 'DHCP'
+                            for line in content.split('\n'):
+                                line = line.strip()
+                                if line.startswith('Name='):
+                                    config['interface'] = line.split('=')[1]
+                    except Exception as e:
+                        print(f"[NETWORK] ⚠️  Errore lettura {f}: {e}")
+        
+        # Se nessuno trovato, prova /etc/network/interfaces.d/
+        if config['mode'] == 'DHCP' and not os.path.exists(systemd_network_dir):
+            interfaces_dir = '/etc/network/interfaces.d/'
+            if os.path.exists(interfaces_dir):
+                for f in os.listdir(interfaces_dir):
+                    if f.endswith('.conf') or '99-' in f:
+                        filepath = os.path.join(interfaces_dir, f)
+                        try:
+                            with open(filepath, 'r') as file:
+                                content = file.read()
+                                if 'static' in content:
+                                    config['mode'] = 'STATIC'
+                                    for line in content.split('\n'):
+                                        if line.strip().startswith('address '):
+                                            config['static_ip'] = line.split()[1]
+                                        elif line.strip().startswith('gateway '):
+                                            config['gateway'] = line.split()[1]
+                        except:
+                            pass
+        
+        return config
+    except Exception as e:
+        print(f"[NETWORK] ❌ Errore lettura configurazione rete: {e}")
+        return {'error': str(e), 'current_ip': 'N/A'}
+
+
+
+def _cidr_to_netmask(cidr):
+    """Converte CIDR (es: 24) a netmask dotted decimal (es: 255.255.255.0)"""
+    cidr = int(cidr)
+    mask = (0xffffffff >> (32 - cidr)) << (32 - cidr)
+    return '.'.join(map(str, [
+        (mask >> 24) & 0xff,
+        (mask >> 16) & 0xff,
+        (mask >> 8) & 0xff,
+        mask & 0xff
+    ]))
+
+
+def set_static_ip(interface, ip_address, netmask, gateway, dns):
+    """Configura IP statico via systemd-networkd su Raspberry Pi Bookworm"""
+    try:
+        # Validazione indirizzi IP
+        import ipaddress
+        ipaddress.IPv4Address(ip_address)
+        ipaddress.IPv4Address(gateway)
+        if dns:
+            for d in dns.split(','):
+                ipaddress.IPv4Address(d.strip())
+        
+        # Crea configurazione per systemd-networkd
+        netmask_decimal = _cidr_to_netmask(int(netmask))
+        
+        systemd_config = f"""[Match]
+Name={interface}
+
+[Network]
+Address={ip_address}/{netmask}
+Gateway={gateway}
+DNS={dns}
+IPv6AcceptRA=no
+
+[Route]
+Destination=0.0.0.0/0
+Gateway={gateway}
+"""
+        
+        # Scrivi il file
+        config_file = f'/tmp/99-{interface}-static.network'
+        with open(config_file, 'w') as f:
+            f.write(systemd_config)
+        
+        # Applica il file
+        target_file = f'/etc/systemd/network/99-{interface}-static.network'
+        subprocess.run(['sudo', 'mkdir', '-p', '/etc/systemd/network'], 
+                      capture_output=True)
+        subprocess.run(['sudo', 'cp', config_file, target_file], 
+                      check=True, capture_output=True)
+        print(f"[NETWORK] ✅ Configurazione salvata in {target_file}")
+        
+        # Riavvia systemd-networkd
+        subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-networkd'], 
+                      capture_output=True, timeout=10)
+        print(f"[NETWORK] ✅ systemd-networkd riavviato")
+        print(f"[NETWORK] ℹ️  IP statico: {ip_address}/{netmask}, Gateway: {gateway}")
+        return True
+    except Exception as e:
+        print(f"[NETWORK] ❌ Errore configurazione IP statico: {e}")
+        raise
+
+
+
+def set_dhcp(interface):
+    """Configura DHCP via systemd-networkd"""
+    try:
+        # Crea configurazione per systemd-networkd
+        systemd_config = f"""[Match]
+Name={interface}
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+"""
+        
+        # Scrivi il file
+        config_file = f'/tmp/99-{interface}-dhcp.network'
+        with open(config_file, 'w') as f:
+            f.write(systemd_config)
+        
+        # Applica il file
+        target_file = f'/etc/systemd/network/99-{interface}-dhcp.network'
+        subprocess.run(['sudo', 'mkdir', '-p', '/etc/systemd/network'], 
+                      capture_output=True)
+        subprocess.run(['sudo', 'cp', config_file, target_file], 
+                      check=True, capture_output=True)
+        
+        # Rimuovi eventuali configurazioni statiche
+        subprocess.run(['sudo', 'rm', '-f', f'/etc/systemd/network/99-{interface}-static.network'], 
+                      capture_output=True)
+        
+        # Riavvia systemd-networkd
+        subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-networkd'], 
+                      capture_output=True, timeout=10)
+        print(f"[NETWORK] ✅ DHCP abilitato su {interface}")
+        return True
+    except Exception as e:
+        print(f"[NETWORK] ❌ Errore configurazione DHCP: {e}")
+        raise
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -561,7 +790,8 @@ def api_settings_save():
 
         new_username = request.form.get('new_username', '').strip()
         new_password = request.form.get('new_password', '').strip()
-        disable_auth = request.form.get('disable_auth') == 'on'
+        disable_auth_value = request.form.get('disable_auth', 'false').strip().lower()
+        disable_auth = disable_auth_value == 'true'
 
         if new_username:
             auth['username'] = new_username
@@ -572,8 +802,10 @@ def api_settings_save():
         auth['enabled'] = not disable_auth
 
         save_auth(auth)
+        print(f"[AUTH] Impostazioni salvate: username={new_username if new_username else 'invariato'}, disable_auth={disable_auth}, enabled={auth['enabled']}")
         return jsonify({'success': True})
     except Exception as e:
+        print(f"[AUTH] ❌ Errore salvataggio: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 
@@ -617,6 +849,7 @@ def api_mjpg_start():
             if not video_file:
                 video_file = full_config.get('mjpg', {}).get('video_path', '')
             if video_file:
+                config['video_path'] = video_file
                 full_config['mjpg'] = full_config.get('mjpg', {})
                 full_config['mjpg']['video_path'] = video_file
                 save_config(full_config)
@@ -664,7 +897,6 @@ def api_mjpg_save():
 
     if source_type == 'video' and video_file:
         config['mjpg']['video_path'] = video_file
-        config['video']['loop'] = True
 
     save_config(config)
     return jsonify({'success': True})
@@ -722,7 +954,7 @@ def api_rtsp_stop():
 @login_required
 def api_videos_list():
     """Lista dei video disponibili"""
-    video_dir = os.path.join(HOME_DIR, 'stream_manager', 'videos')
+    video_dir = os.path.join(APP_DIR, 'videos')
     if not os.path.exists(video_dir):
         os.makedirs(video_dir, exist_ok=True)
         return jsonify({'videos': []})
@@ -759,7 +991,7 @@ def api_videos_upload():
         if ext not in allowed_extensions:
             return jsonify({'success': False, 'error': 'Formato non supportato'})
 
-        video_dir = os.path.join(HOME_DIR, 'stream_manager', 'videos')
+        video_dir = os.path.join(APP_DIR, 'videos')
         os.makedirs(video_dir, exist_ok=True)
 
         filepath = os.path.join(video_dir, file.filename)
@@ -781,7 +1013,7 @@ def api_videos_delete():
         if not filename:
             return jsonify({'success': False, 'error': 'Nome file mancante'})
 
-        video_dir = os.path.join(HOME_DIR, 'stream_manager', 'videos')
+        video_dir = os.path.join(APP_DIR, 'videos')
         filepath = os.path.join(video_dir, filename)
 
         if not os.path.exists(filepath):
@@ -823,10 +1055,91 @@ def api_rtsp_save():
 
     if source_type == 'video' and video_file:
         config['rtsp']['video_path'] = video_file
-        config['video']['loop'] = True
+        config['rtsp']['loop'] = True
 
     save_config(config)
     return jsonify({'success': True})
+
+
+@app.route('/api/network/info', methods=['GET'])
+@login_required
+def api_network_info():
+    """Restituisce informazioni di rete"""
+    try:
+        hostname = get_hostname()
+        network = get_network_info()
+        return jsonify({
+            'success': True,
+            'hostname': hostname,
+            'network': network
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/network/hostname', methods=['POST'])
+@login_required
+def api_network_hostname():
+    """Cambia l'hostname"""
+    try:
+        new_hostname = request.form.get('hostname', '').strip()
+        
+        if not new_hostname:
+            return jsonify({'success': False, 'error': 'Hostname non può essere vuoto'})
+        
+        set_hostname(new_hostname)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Hostname cambiato in "{new_hostname}"',
+            'hostname': new_hostname
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/network/ip/static', methods=['POST'])
+@login_required
+def api_network_static_ip():
+    """Configura IP statico"""
+    try:
+        interface = request.form.get('interface', 'eth0').strip()
+        ip_address = request.form.get('ip_address', '').strip()
+        netmask = request.form.get('netmask', '24').strip()
+        gateway = request.form.get('gateway', '').strip()
+        dns = request.form.get('dns', '8.8.8.8').strip()
+        
+        if not all([interface, ip_address, gateway]):
+            return jsonify({'success': False, 'error': 'Campi obbligatori: interfaccia, IP, gateway'})
+        
+        set_static_ip(interface, ip_address, netmask, gateway, dns)
+        
+        return jsonify({
+            'success': True,
+            'message': f'IP statico configurato: {ip_address}/{netmask}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/network/ip/dhcp', methods=['POST'])
+@login_required
+def api_network_dhcp():
+    """Configura DHCP"""
+    try:
+        interface = request.form.get('interface', 'eth0').strip()
+        
+        if not interface:
+            return jsonify({'success': False, 'error': 'Interfaccia non specificata'})
+        
+        set_dhcp(interface)
+        
+        return jsonify({
+            'success': True,
+            'message': f'DHCP abilitato su {interface}'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 def autostart_streams():
@@ -872,5 +1185,5 @@ if __name__ == '__main__':
     time.sleep(5)
     autostart_streams()
 
-    print("🌐 Avvio server web sulla porta 5000...")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    print("🌐 Avvio server web sulla porta 8090...")
+    app.run(host='0.0.0.0', port=8090, debug=False)

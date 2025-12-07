@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raspberry Pi Stream Manager</title>
+    <title id="page-title">Video Stream Manager</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #221f26 0%, #3d1e05 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -255,6 +255,20 @@
             font-family: monospace;
             margin-top: 10px;
             word-break: break-all;
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        .stream-url:hover {
+            background-color: #e8f4f8;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .stream-url a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        .stream-url a:hover {
+            text-decoration: underline;
+            color: #0052a3;
         }
         .notification {
             position: fixed;
@@ -331,20 +345,22 @@
         <div class="header">
             <div class="header-top">
                 <div>
-                    <h1>🎥 Video Streamer 🎥</h1>
-                    <p class="header-subtitle">Gestisci i tuoi stream video in modo semplice</p>
+                    <img src="../static/stemma_small.png" alt="Stemma" style="height: 50px; vertical-align: middle;">
+                    <h1>Video Stream Manager</h1>
+                    <p class="header-subtitle">Converti una sorgente video in uno stream</p>
                 </div>
                 <div class="header-buttons">
                     <button class="btn-restart" onclick="restartService()" title="Riavvia il servizio stream-manager">
                         🔄 Riavvia Servizio
                     </button>
-                    <a href="#" class="btn-settings" onclick="openSettingsModal(); return false;">⚙️ Impostazioni</a>
+                    <a href="#" class="btn-settings" onclick="openNetworkModal(); return false;">🌐 Rete</a>
+                    <a href="#" class="btn-settings" onclick="openSecurityModal(); return false;">🔐 Utente/Password</a>
                     <a href="/logout" class="btn-logout">🚪 Esci</a>
                 </div>
             </div>
 
             <div class="config-info-box" id="config-info">
-                Tommaso v1.20251203.
+                Tommaso v2.20251208.
             </div>
 
             <div class="system-info">
@@ -385,6 +401,9 @@
             </div>
 
             <form id="mjpg-form">
+                <!-- Campo nascosto per il tipo di sorgente -->
+                <input type="hidden" name="source_type" id="mjpg-source-type" value="device">
+                
                 <div class="form-row">
                     <div class="form-group" id="mjpg-device-group">
                         <label>Dispositivo Video</label>
@@ -477,7 +496,9 @@
 
             <div class="stream-preview">
                 <strong>URL Stream:</strong>
-                <div class="stream-url" id="mjpg-url">http://[IP_RASPBERRY]:8080/?action=stream</div>
+                <div class="stream-url" id="mjpg-url" title="Clicca per copiare l'URL" style="cursor: pointer;" onclick="copyMjpgUrl()">
+                    <a href="http://[IP_RASPBERRY]:8080/?action=stream" id="mjpg-url-link" target="_blank" style="color: inherit;" onclick="return copyMjpgUrl()">http://[IP_RASPBERRY]:8080/?action=stream</a>
+                </div>
             </div>
         </div>
 
@@ -503,6 +524,9 @@
             </div>
 
             <form id="rtsp-form">
+                <!-- Campo nascosto per il tipo di sorgente -->
+                <input type="hidden" name="source_type" id="rtsp-source-type" value="device">
+                
                 <div class="form-row">
                     <div class="form-group" id="rtsp-device-group">
                         <label>Dispositivo Video</label>
@@ -600,49 +624,163 @@
 
             <div class="stream-preview">
                 <strong>URL Stream RTSP:</strong>
-                <div class="stream-url" id="rtsp-url">rtsp://[IP_RASPBERRY]:8554/video</div>
+                <div class="stream-url" id="rtsp-url" title="Clicca per copiare l'URL" style="cursor: pointer;" onclick="copyRtspUrl()">
+                    <a href="#" id="rtsp-url-link" style="color: inherit; text-decoration: none;" onclick="return copyRtspUrl()">rtsp://[IP_RASPBERRY]:8554/video</a>
+                </div>
                 <p style="margin-top: 10px; color: #666; font-size: 14px;">
-                    💡 Usa VLC o altro player RTSP per visualizzare lo stream
+                    💡 Clicca per copiare • Usa VLC o altro player RTSP per visualizzare lo stream
                 </p>
             </div>
         </div>
     </div>
 
-    <!-- Modal Impostazioni -->
-    <div id="settingsModal" class="modal">
-        <div class="modal-content">
+    <!-- Modal Rete -->
+    <div id="networkModal" class="modal">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
             <div class="modal-header">
-                <span class="close" onclick="closeSettingsModal()">&times;</span>
-                <h2>⚙️ Impostazioni</h2>
+                <span class="close" onclick="closeNetworkModal()">&times;</span>
+                <h2>🌐 Configurazione Rete</h2>
             </div>
 
-            <form id="settings-form">
+            <!-- Sezione informazioni correnti -->
+            <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="margin-top: 0; color: #166534;">📊 Stato Attuale</h3>
+                <div style="display: grid; gap: 10px;">
+                    <div>
+                        <strong style="color: #065f46;">IP Corrente:</strong>
+                        <span id="current-ip-display" style="color: #0f766e; font-weight: bold;">Caricamento...</span>
+                    </div>
+                    <div>
+                        <strong style="color: #065f46;">Modalità:</strong>
+                        <span id="current-mode-display" style="color: #0f766e; font-weight: bold;">Caricamento...</span>
+                    </div>
+                    <div>
+                        <strong style="color: #065f46;">Gateway:</strong>
+                        <span id="current-gateway-display" style="color: #0f766e;">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: #e0f2fe; border-left: 4px solid #0284c7; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                
+                <div class="form-group">
+                    <label><strong>Nome Dispositivo (Hostname)</strong></label>
+                    <input type="text" id="hostname-input" placeholder="Inserisci nuovo hostname" style="margin-bottom: 10px;">
+                    <button type="button" class="btn-save" onclick="changeHostname()" style="padding: 10px 20px; font-size: 13px; width: 100%;">
+                        🔄 Cambia Hostname
+                    </button>
+                    <p style="font-size: 11px; color: #0c4a6e; margin-top: 8px;">
+                        ℹ️ Il dispositivo sarà raggiungibile con il nuovo nome sulla rete
+                    </p>
+                </div>
+
+                <hr style="margin: 15px 0; border: none; border-top: 1px solid #0284c7;">
+
+                <div style="margin-top: 15px;">
+                    <label><strong>Configurazione Indirizzo IP</strong></label>
+                    <div style="margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <input type="radio" name="ip-mode" value="dhcp" id="ip-dhcp" checked>
+                            <span>🔄 DHCP (Automatico)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="radio" name="ip-mode" value="static" id="ip-static">
+                            <span>🔧 IP Statico</span>
+                        </label>
+                    </div>
+
+                    <!-- Sezione DHCP -->
+                    <div id="dhcp-section" style="margin-top: 15px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #0284c7;">
+                        <div class="form-group">
+                            <label>Interfaccia di Rete</label>
+                            <select id="dhcp-interface" style="width: 100%;">
+                                <option value="eth0">eth0 (Ethernet)</option>
+                                <option value="wlan0">wlan0 (Wi-Fi)</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn-save" onclick="applyDHCP()" style="width: 100%; padding: 10px;">
+                            🔄 Attiva DHCP
+                        </button>
+                    </div>
+
+                    <!-- Sezione IP Statico (nascosta di default) -->
+                    <div id="static-ip-section" style="display: none; margin-top: 15px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #0284c7;">
+                        <div class="form-group">
+                            <label>Interfaccia di Rete</label>
+                            <select id="network-interface" style="width: 100%;">
+                                <option value="eth0">eth0 (Ethernet)</option>
+                                <option value="wlan0">wlan0 (Wi-Fi)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Indirizzo IP</label>
+                            <input type="text" id="static-ip" placeholder="es. 192.168.1.100">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Subnet Mask (CIDR)</label>
+                            <select id="netmask" style="width: 100%;">
+                                <option value="24">/24 (255.255.255.0)</option>
+                                <option value="25">/25 (255.255.255.128)</option>
+                                <option value="23">/23 (255.255.254.0)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Gateway (Router)</label>
+                            <input type="text" id="gateway-ip" placeholder="es. 192.168.1.1">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Server DNS</label>
+                            <input type="text" id="dns-servers" placeholder="es. 8.8.8.8" value="8.8.8.8">
+                        </div>
+
+                        <button type="button" class="btn-save" onclick="applyStaticIP()" style="width: 100%; padding: 10px;">
+                            💾 Applica IP Statico
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Sicurezza -->
+    <div id="securityModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="close" onclick="closeSecurityModal()">&times;</span>
+                <h2>🔐 Sicurezza - Username e Password</h2>
+            </div>
+
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px;">
                 <div class="form-group">
                     <label>Nuovo Username</label>
-                    <input type="text" name="new_username" placeholder="Lascia vuoto per non cambiare">
+                    <input type="text" id="new-username" placeholder="Lascia vuoto per non cambiare">
                 </div>
 
                 <div class="form-group">
                     <label>Nuova Password</label>
-                    <input type="password" name="new_password" placeholder="Lascia vuoto per non cambiare">
+                    <input type="password" id="new-password" placeholder="Lascia vuoto per non cambiare">
                 </div>
 
                 <div class="form-group">
                     <label>Conferma Password</label>
-                    <input type="password" name="confirm_password" placeholder="Conferma la nuova password">
+                    <input type="password" id="confirm-password" placeholder="Conferma la nuova password">
                 </div>
 
                 <div class="form-group">
                     <label style="display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" name="disable_auth" id="disable-auth" style="width: auto;">
+                        <input type="checkbox" id="disable-auth" style="width: auto;">
                         <span>Disabilita autenticazione (non consigliato)</span>
                     </label>
                 </div>
 
-                <div class="button-group">
-                    <button type="button" class="btn-save" onclick="saveSettings()">💾 Salva Impostazioni</button>
-                </div>
-            </form>
+                <button type="button" class="btn-save" onclick="saveSettings()" style="width: 100%; padding: 12px; font-size: 14px;">
+                    💾 Salva Impostazioni
+                </button>
+            </div>
         </div>
     </div>
 
@@ -665,15 +803,18 @@
                 const deviceGroup = document.getElementById('mjpg-device-group');
                 const videoGroup = document.getElementById('mjpg-video-group');
                 const uploadSection = document.getElementById('mjpg-upload-section');
+                const sourceTypeInput = document.getElementById('mjpg-source-type');
 
                 if (this.value === 'device') {
                     deviceGroup.style.display = 'block';
                     videoGroup.style.display = 'none';
                     uploadSection.style.display = 'none';
+                    sourceTypeInput.value = 'device';
                 } else {
                     deviceGroup.style.display = 'none';
                     videoGroup.style.display = 'block';
                     uploadSection.style.display = 'block';
+                    sourceTypeInput.value = 'video';
                     loadVideoList('mjpg');
                 }
             });
@@ -685,27 +826,192 @@
                 const deviceGroup = document.getElementById('rtsp-device-group');
                 const videoGroup = document.getElementById('rtsp-video-group');
                 const uploadSection = document.getElementById('rtsp-upload-section');
+                const sourceTypeInput = document.getElementById('rtsp-source-type');
 
                 if (this.value === 'device') {
                     deviceGroup.style.display = 'block';
                     videoGroup.style.display = 'none';
                     uploadSection.style.display = 'none';
+                    sourceTypeInput.value = 'device';
                 } else {
                     deviceGroup.style.display = 'none';
                     videoGroup.style.display = 'block';
                     uploadSection.style.display = 'block';
+                    sourceTypeInput.value = 'video';
                     loadVideoList('rtsp');
                 }
             });
         });
 
+        // Gestione modalità IP (DHCP/Statico)
+        document.querySelectorAll('input[name="ip-mode"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const staticSection = document.getElementById('static-ip-section');
+                const dhcpSection = document.getElementById('dhcp-section');
+                
+                if (this.value === 'static') {
+                    staticSection.style.display = 'block';
+                    dhcpSection.style.display = 'none';
+                } else {
+                    staticSection.style.display = 'none';
+                    dhcpSection.style.display = 'block';
+                }
+            });
+        });
+
+        // Funzioni di gestione rete
+        function changeHostname() {
+            const hostnameInput = document.getElementById('hostname-input');
+            const newHostname = hostnameInput.value.trim();
+
+            if (!newHostname) {
+                showNotification('Inserisci un hostname valido', 'error');
+                return;
+            }
+
+            if (!/^[a-z0-9-]{1,63}$/i.test(newHostname)) {
+                showNotification('Hostname non valido. Usa solo lettere, numeri e trattini', 'error');
+                return;
+            }
+
+            showNotification('Cambio hostname in corso...', 'warning');
+
+            const formData = new FormData();
+            formData.append('hostname', newHostname);
+
+            fetch('/api/network/hostname', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('✅ Hostname cambiato con successo!', 'success');
+                    hostnameInput.value = '';
+                    setTimeout(() => {
+                        showNotification('⚠️ Collegati di nuovo al dispositivo con il nuovo nome', 'warning');
+                    }, 1500);
+                } else {
+                    showNotification('Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            });
+        }
+
+        function applyStaticIP() {
+            const interface = document.getElementById('network-interface').value;
+            const ip = document.getElementById('static-ip').value.trim();
+            const netmask = document.getElementById('netmask').value;
+            const gateway = document.getElementById('gateway-ip').value.trim();
+            const dns = document.getElementById('dns-servers').value.trim();
+
+            if (!ip || !gateway) {
+                showNotification('Compila i campi obbligatori', 'error');
+                return;
+            }
+
+            if (!confirm('ATTENZIONE!\n\nStai per cambiare l\'IP in: ' + ip + '\n\n1. La configurazione verrà applicata\n2. La pagina cercherà di riconnettersi al nuovo IP\n3. Se non si connette, accedi manualmente a: http://' + ip + '\n\nContinuare?')) {
+                return;
+            }
+
+            showNotification('⏳ Applicazione IP statico in corso... (non chiudere questa pagina)', 'warning');
+
+            const formData = new FormData();
+            formData.append('interface', interface);
+            formData.append('ip_address', ip);
+            formData.append('netmask', netmask);
+            formData.append('gateway', gateway);
+            formData.append('dns', dns);
+
+            fetch('/api/network/ip/static', {
+                method: 'POST',
+                body: formData,
+                timeout: 30000
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('✅ Configurazione applicata! Attendo il riavvio della rete... (10 secondi)', 'success');
+                    closeNetworkModal();
+                    
+                    // Aspetta 10 secondi prima di provare a riconnettersi
+                    setTimeout(() => {
+                        showNotification('🔄 Tentativo di riconnessione a: ' + ip, 'warning');
+                        window.location.href = 'http://' + ip;
+                    }, 10000);
+                } else {
+                    showNotification('❌ Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            })
+            .catch(err => {
+                // Se c'è timeout o errore di rete, prova comunque a riconnettersi
+                showNotification('⚠️ Timeout connessione (normale). Riconessione in corso...', 'warning');
+                setTimeout(() => {
+                    window.location.href = 'http://' + ip;
+                }, 8000);
+            });
+        }
+
+        function applyDHCP() {
+            const interface = document.getElementById('dhcp-interface').value;
+
+            if (!confirm('Attivare DHCP su ' + interface + '?\n\nIl dispositivo riceverà un IP automaticamente dal router.\nLa pagina si ricaricherà dopo 10 secondi.')) {
+                return;
+            }
+
+            showNotification('⏳ Attivazione DHCP in corso... (non chiudere questa pagina)', 'warning');
+
+            const formData = new FormData();
+            formData.append('interface', interface);
+
+            fetch('/api/network/ip/dhcp', {
+                method: 'POST',
+                body: formData,
+                timeout: 30000
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('✅ DHCP attivato! Attendo il riavvio della rete... (10 secondi)', 'success');
+                    closeNetworkModal();
+                    
+                    // Aspetta 10 secondi prima di ricaricare la pagina
+                    setTimeout(() => {
+                        showNotification('🔄 Ricaricamento pagina...', 'warning');
+                        window.location.reload();
+                    }, 10000);
+                } else {
+                    showNotification('❌ Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            })
+            .catch(err => {
+                // Se c'è timeout, riprova comunque a ricaricare
+                showNotification('⚠️ Timeout connessione (normale). Ricaricamento in corso...', 'warning');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 8000);
+            });
+        }
+
         // Carica lista video
         function loadVideoList(type, selectedPath = null) {
+            console.log('[DEBUG] loadVideoList called for type:', type);
             fetch('/api/videos/list')
-                .then(r => r.json())
+                .then(r => {
+                    console.log('[DEBUG] Response status:', r.status);
+                    if (!r.ok) {
+                        throw new Error('HTTP ' + r.status);
+                    }
+                    return r.json();
+                })
                 .then(data => {
+                    console.log('[DEBUG] Videos loaded:', data);
                     const select = document.getElementById(`${type}-video-file`);
                     const list = document.getElementById(`${type}-video-list`);
+                    
+                    if (!select || !list) {
+                        console.error('[ERROR] Elements not found:', { select, list });
+                        return;
+                    }
                     
                     // Aggiorna select
                     select.innerHTML = '<option value="">Seleziona un video...</option>';
@@ -732,6 +1038,10 @@
                         `;
                         list.appendChild(item);
                     });
+                })
+                .catch(err => {
+                    console.error('[ERROR] loadVideoList failed:', err);
+                    showNotification('Errore caricamento video: ' + err, 'error');
                 });
         }
 
@@ -748,14 +1058,19 @@
             const formData = new FormData();
             formData.append('video', file);
 
-            showNotification('Caricamento in corso...', 'success');
+            showNotification('Caricamento in corso... (' + file.name + ')', 'success');
+            console.log('[DEBUG] Caricamento video:', file.name, 'Size:', file.size);
 
             fetch('/api/videos/upload', {
                 method: 'POST',
                 body: formData
             })
-            .then(r => r.json())
+            .then(r => {
+                console.log('[DEBUG] Response status:', r.status);
+                return r.json();
+            })
             .then(data => {
+                console.log('[DEBUG] Upload response:', data);
                 if (data.success) {
                     showNotification('Video caricato con successo!', 'success');
                     fileInput.value = '';
@@ -763,6 +1078,10 @@
                 } else {
                     showNotification('Errore: ' + data.error, 'error');
                 }
+            })
+            .catch(err => {
+                console.error('[ERROR] Upload failed:', err);
+                showNotification('Errore caricamento: ' + err.message, 'error');
             });
         }
 
@@ -850,8 +1169,17 @@
 
                     // Aggiorna URL
                     const hostname = window.location.hostname;
-                    document.getElementById('mjpg-url').textContent = `http://${hostname}:${data.config.mjpg.port}`;
-                    document.getElementById('rtsp-url').textContent = `rtsp://${hostname}:${data.config.rtsp.port}/video`;
+                    const mjpgUrl = `http://${hostname}:${data.config.mjpg.port}/?action=stream`;
+                    const rtspUrl = `rtsp://${hostname}:${data.config.rtsp.port}/video`;
+                    
+                    // Aggiorna link MJPG
+                    const mjpgLink = document.getElementById('mjpg-url-link');
+                    mjpgLink.href = mjpgUrl;
+                    mjpgLink.textContent = mjpgUrl;
+                    
+                    // Aggiorna link RTSP (copiar sul click)
+                    const rtspLink = document.getElementById('rtsp-url-link');
+                    rtspLink.textContent = rtspUrl;
                 });
         }
 
@@ -878,26 +1206,34 @@
             const form = document.getElementById('mjpg-form');
             const data = new FormData(form);
 
-            // Aggiungi tipo sorgente
+            // Aggiungi tipo sorgente (usa set per evitare duplicati)
             const sourceType = document.querySelector('input[name="mjpg-source"]:checked').value;
-            data.append('source_type', sourceType);
+            data.set('source_type', sourceType);
 
-            // Il checkbox viene automaticamente inviato dal form
-            // Non serve aggiungere manualmente se usiamo FormData dal form completo
+            // Se la sorgente è video, assicura che video_file sia presente
+            if (sourceType === 'video') {
+                const videoFile = document.getElementById('mjpg-video-file').value;
+                if (!videoFile) {
+                    showNotification('Seleziona un video prima di avviare!', 'error');
+                    return;
+                }
+                data.set('video_file', videoFile);
+            }
 
             fetch('/api/mjpg/start', {
                 method: 'POST',
                 body: data
             })
             .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification('MJPG Streamer avviato con successo!', 'success');
+            .then(result => {
+                if (result.success) {
+                    showNotification('✅ MJPG Streamer avviato!', 'success');
                     updateStatus();
                 } else {
-                    showNotification('Errore: ' + data.error, 'error');
+                    showNotification('❌ Errore: ' + (result.error || 'Sconosciuto'), 'error');
                 }
-            });
+            })
+            .catch(err => showNotification('❌ Errore di connessione: ' + err, 'error'));
         }
 
         function stopMJPG() {
@@ -915,43 +1251,65 @@
 
             // Aggiungi tipo sorgente
             const sourceType = document.querySelector('input[name="mjpg-source"]:checked').value;
-            data.append('source_type', sourceType);
+            data.set('source_type', sourceType);
 
-            // Il FormData prende automaticamente tutti i campi del form inclusi i checkbox
+            // Se la sorgente è video, assicura che video_file sia presente
+            if (sourceType === 'video') {
+                const videoFile = document.getElementById('mjpg-video-file').value;
+                if (!videoFile) {
+                    showNotification('Seleziona un video prima di salvare!', 'error');
+                    return;
+                }
+                data.set('video_file', videoFile);
+            }
 
             fetch('/api/mjpg/save', {
                 method: 'POST',
                 body: data
             })
             .then(r => r.json())
-            .then(data => {
-                showNotification('Configurazione salvata!', 'success');
-            });
+            .then(result => {
+                if (result.success) {
+                    showNotification('Configurazione MJPG salvata!', 'success');
+                } else {
+                    showNotification('Errore: ' + (result.error || 'Sconosciuto'), 'error');
+                }
+            })
+            .catch(err => showNotification('Errore di connessione: ' + err, 'error'));
         }
 
         function startRTSP() {
             const form = document.getElementById('rtsp-form');
             const data = new FormData(form);
 
-            // Aggiungi tipo sorgente
+            // Aggiungi tipo sorgente (usa set per evitare duplicati)
             const sourceType = document.querySelector('input[name="rtsp-source"]:checked').value;
-            data.append('source_type', sourceType);
+            data.set('source_type', sourceType);
 
-            // Il FormData prende automaticamente tutti i campi del form
+            // Se la sorgente è video, assicura che video_file sia presente
+            if (sourceType === 'video') {
+                const videoFile = document.getElementById('rtsp-video-file').value;
+                if (!videoFile) {
+                    showNotification('Seleziona un video prima di avviare!', 'error');
+                    return;
+                }
+                data.set('video_file', videoFile);
+            }
 
             fetch('/api/rtsp/start', {
                 method: 'POST',
                 body: data
             })
             .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification('Stream RTSP avviato con successo!', 'success');
+            .then(result => {
+                if (result.success) {
+                    showNotification('✅ Stream RTSP avviato!', 'success');
                     updateStatus();
                 } else {
-                    showNotification('Errore: ' + data.error, 'error');
+                    showNotification('❌ Errore: ' + (result.error || 'Sconosciuto'), 'error');
                 }
-            });
+            })
+            .catch(err => showNotification('❌ Errore di connessione: ' + err, 'error'));
         }
 
         function stopRTSP() {
@@ -969,59 +1327,190 @@
 
             // Aggiungi tipo sorgente
             const sourceType = document.querySelector('input[name="rtsp-source"]:checked').value;
-            data.append('source_type', sourceType);
+            data.set('source_type', sourceType);
 
-            // Il FormData prende automaticamente tutti i campi del form
+            // Se la sorgente è video, assicura che video_file sia presente
+            if (sourceType === 'video') {
+                const videoFile = document.getElementById('rtsp-video-file').value;
+                if (!videoFile) {
+                    showNotification('Seleziona un video prima di salvare!', 'error');
+                    return;
+                }
+                data.set('video_file', videoFile);
+            }
 
             fetch('/api/rtsp/save', {
                 method: 'POST',
                 body: data
             })
             .then(r => r.json())
-            .then(data => {
-                showNotification('Configurazione salvata!', 'success');
-            });
+            .then(result => {
+                if (result.success) {
+                    showNotification('Configurazione RTSP salvata!', 'success');
+                } else {
+                    showNotification('Errore: ' + (result.error || 'Sconosciuto'), 'error');
+                }
+            })
+            .catch(err => showNotification('Errore di connessione: ' + err, 'error'));
         }
 
-        function openSettingsModal() {
-            document.getElementById('settingsModal').style.display = 'block';
+        function openNetworkModal() {
+            document.getElementById('networkModal').style.display = 'block';
+            console.log('✅ Network Modal aperto');
+            
+            // Carica la configurazione attuale della rete
+            fetch('/api/network/info')
+                .then(r => r.json())
+                .then(data => {
+                    console.log('[DEBUG] Network info:', data);
+                    
+                    if (!data.error) {
+                        const mode = data.mode || 'DHCP';
+                        const currentIp = data.current_ip || 'N/A';
+                        const staticIp = data.static_ip || '';
+                        const gateway = data.gateway || '192.168.1.1';
+                        const dns = data.dns || '8.8.8.8';
+                        const iface = data.interface || 'wlan0';
+                        
+                        // Aggiorna i display informativi
+                        document.getElementById('current-ip-display').textContent = currentIp;
+                        document.getElementById('current-mode-display').textContent = mode === 'STATIC' ? '🔧 IP Statico' : '🔄 DHCP (Automatico)';
+                        document.getElementById('current-gateway-display').textContent = gateway || '--';
+                        
+                        // Aggiorna i radio button
+                        if (mode === 'STATIC') {
+                            document.getElementById('ip-static').checked = true;
+                            document.getElementById('ip-dhcp').checked = false;
+                            document.getElementById('static-ip-section').style.display = 'block';
+                            document.getElementById('dhcp-section').style.display = 'none';
+                        } else {
+                            document.getElementById('ip-dhcp').checked = true;
+                            document.getElementById('ip-static').checked = false;
+                            document.getElementById('dhcp-section').style.display = 'block';
+                            document.getElementById('static-ip-section').style.display = 'none';
+                        }
+                        
+                        // Popola i campi
+                        document.getElementById('network-interface').value = iface;
+                        document.getElementById('dhcp-interface').value = iface;
+                        document.getElementById('static-ip').value = staticIp;
+                        document.getElementById('gateway-ip').value = gateway;
+                        document.getElementById('dns-servers').value = dns;
+                        
+                        // Mostra log
+                        console.log(`📱 IP Corrente: ${currentIp} | Modalità: ${mode}`);
+                    }
+                })
+                .catch(err => {
+                    console.error('[ERROR] Errore caricamento network info:', err);
+                    document.getElementById('current-ip-display').textContent = 'Errore';
+                    document.getElementById('current-mode-display').textContent = 'Errore';
+                });
         }
 
-        function closeSettingsModal() {
-            document.getElementById('settingsModal').style.display = 'none';
+        function closeNetworkModal() {
+            document.getElementById('networkModal').style.display = 'none';
+        }
+
+        function openSecurityModal() {
+            document.getElementById('securityModal').style.display = 'block';
+            console.log('✅ Security Modal aperto');
+        }
+
+        function closeSecurityModal() {
+            document.getElementById('securityModal').style.display = 'none';
         }
 
         function saveSettings() {
-            const form = document.getElementById('settings-form');
-            const data = new FormData(form);
-
-            const newPassword = data.get('new_password');
-            const confirmPassword = data.get('confirm_password');
+            const newUsername = document.getElementById('new-username').value.trim();
+            const newPassword = document.getElementById('new-password').value.trim();
+            const confirmPassword = document.getElementById('confirm-password').value.trim();
+            const disableAuth = document.getElementById('disable-auth').checked;
 
             if (newPassword && newPassword !== confirmPassword) {
                 showNotification('Le password non corrispondono!', 'error');
                 return;
             }
 
+            if (!newUsername && !newPassword && !disableAuth) {
+                showNotification('Inserisci almeno un campo da cambiare', 'info');
+                return;
+            }
+
+            const data = new FormData();
+            if (newUsername) data.append('new_username', newUsername);
+            if (newPassword) data.append('new_password', newPassword);
+            data.append('disable_auth', disableAuth ? 'true' : 'false');
+
             fetch('/api/settings/save', {
                 method: 'POST',
                 body: data
             })
             .then(r => r.json())
-            .then(data => {
-                if (data.success) {
+            .then(response => {
+                if (response.success) {
                     showNotification('Impostazioni salvate! Effettua nuovamente il login.', 'success');
                     setTimeout(() => {
                         window.location.href = '/logout';
                     }, 2000);
                 } else {
-                    showNotification('Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                    showNotification('Errore: ' + (response.error || 'Errore sconosciuto'), 'error');
                 }
+            })
+            .catch(err => {
+                showNotification('Errore di connessione: ' + err, 'error');
             });
         }
 
+        // Setup radio buttons per IP mode
+        document.addEventListener('DOMContentLoaded', function() {
+            const ipDhcpRadio = document.getElementById('ip-dhcp');
+            const ipStaticRadio = document.getElementById('ip-static');
+            const dhcpSection = document.getElementById('dhcp-section');
+            const staticIpSection = document.getElementById('static-ip-section');
+
+            if (ipDhcpRadio && ipStaticRadio) {
+                ipDhcpRadio.addEventListener('change', function() {
+                    if (this.checked) {
+                        dhcpSection.style.display = 'block';
+                        staticIpSection.style.display = 'none';
+                    }
+                });
+
+                ipStaticRadio.addEventListener('change', function() {
+                    if (this.checked) {
+                        dhcpSection.style.display = 'none';
+                        staticIpSection.style.display = 'block';
+                    }
+                });
+            }
+
+            // Chiudi modal quando clicchi fuori
+            window.onclick = function(event) {
+                const networkModal = document.getElementById('networkModal');
+                const securityModal = document.getElementById('securityModal');
+                if (event.target == networkModal) {
+                    networkModal.style.display = 'none';
+                }
+                if (event.target == securityModal) {
+                    securityModal.style.display = 'none';
+                }
+            }
+        });
+
         // Carica configurazione al caricamento pagina
         window.onload = function() {
+            // Carica hostname e aggiorna il titolo della pagina
+            fetch('/api/network/info')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.hostname) {
+                        document.getElementById('page-title').textContent = `${data.hostname} - Video Stream Manager`;
+                    }
+                })
+                .catch(err => console.log('Errore caricamento hostname:', err));
+
+            // Carica configurazione stream
             fetch('/api/config')
                 .then(r => r.json())
                 .then(config => {
@@ -1089,7 +1578,92 @@
                     console.error('Errore caricamento configurazione:', err);
                     showNotification('Errore nel caricamento della configurazione', 'error');
                 });
+
+            // Carica informazioni di rete
+            fetch('/api/network/info')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.hostname) {
+                        document.getElementById('hostname-input').placeholder = `Attuale: ${data.hostname}`;
+                        // Carica info IP se disponibili
+                        if (data.network.current_ip) {
+                            console.log('IP attuale:', data.network.current_ip);
+                        }
+                    }
+                })
+                .catch(err => console.error('Errore caricamento info rete:', err));
         };
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('✅ URL copiato negli appunti!', 'success');
+                }).catch(err => {
+                    console.error('Errore nella copia:', err);
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showNotification('✅ URL copiato negli appunti!', 'success');
+        }
+
+        function copyMjpgUrl() {
+            const mjpgLink = document.getElementById('mjpg-url-link');
+            const text = mjpgLink.textContent;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('✅ URL MJPG copiato negli appunti!', 'success');
+                }).catch(err => {
+                    console.error('Errore nella copia:', err);
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+            return false;
+        }
+
+        function copyRtspUrl() {
+            const rtspLink = document.getElementById('rtsp-url-link');
+            const text = rtspLink.textContent;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showNotification('✅ URL RTSP copiato negli appunti!', 'success');
+                }).catch(err => {
+                    console.error('Errore nella copia:', err);
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+            return false;
+        }
+
+        // Event listener per copiare MJPG URL al click
+        document.addEventListener('DOMContentLoaded', function() {
+            const mjpgUrlDiv = document.getElementById('mjpg-url');
+            if (mjpgUrlDiv) {
+                mjpgUrlDiv.addEventListener('click', function(e) {
+                    if (e.target.tagName !== 'A') {
+                        e.preventDefault();
+                        const link = document.getElementById('mjpg-url-link');
+                        copyToClipboard(link.textContent);
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
