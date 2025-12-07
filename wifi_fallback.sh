@@ -49,11 +49,15 @@ done
 # Se arriviamo qui, non c'è connessione: attiva hotspot
 log_msg "❌ Nessuna connessione internet disponibile. Attivazione hotspot..."
 
-# Installa i pacchetti se non presenti
+# Verifica che hostapd e dnsmasq siano installati
 if ! command -v hostapd &> /dev/null; then
-    log_msg "📦 Installazione hostapd e dnsmasq..."
-    sudo apt update -qq
-    sudo apt install -y hostapd dnsmasq
+    log_msg "❌ hostapd non è installato. Esegui auto_install.sh per installarlo."
+    exit 1
+fi
+
+if ! command -v dnsmasq &> /dev/null; then
+    log_msg "❌ dnsmasq non è installato. Esegui auto_install.sh per installarlo."
+    exit 1
 fi
 
 # Configura indirizzo IP statico per hotspot
@@ -72,6 +76,8 @@ wmm_enabled=1
 macaddr_acl=0
 auth_algs=1
 ignore_broadcast_ssid=0
+wpa=0
+wpa_key_mgmt=NONE
 EOF
 
 # Crea configurazione dnsmasq

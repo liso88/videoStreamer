@@ -297,11 +297,13 @@
         }
         .modal-content {
             background: white;
-            margin: 10% auto;
+            margin: 2% auto;
             padding: 30px;
             border-radius: 15px;
             width: 90%;
-            max-width: 500px;
+            max-width: 700px;
+            max-height: 95vh;
+            overflow-y: auto;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
         .modal-header {
@@ -352,6 +354,9 @@
                 <div class="header-buttons">
                     <button class="btn-restart" onclick="restartService()" title="Riavvia il servizio stream-manager">
                         🔄 Riavvia Servizio
+                    </button>
+                    <button class="btn-restart" onclick="rebootSystem()" title="Riavvia il dispositivo" style="background: #f97316;">
+                        🔌 Riavvia Dispositivo
                     </button>
                     <a href="#" class="btn-settings" onclick="openNetworkModal(); return false;">🌐 Rete</a>
                     <a href="#" class="btn-settings" onclick="openSecurityModal(); return false;">🔐 Utente/Password</a>
@@ -636,7 +641,7 @@
 
     <!-- Modal Rete -->
     <div id="networkModal" class="modal">
-        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+        <div class="modal-content">
             <div class="modal-header">
                 <span class="close" onclick="closeNetworkModal()">&times;</span>
                 <h2>🌐 Configurazione Rete</h2>
@@ -740,6 +745,53 @@
                         <button type="button" class="btn-save" onclick="applyStaticIP()" style="width: 100%; padding: 10px;">
                             💾 Applica IP Statico
                         </button>
+                    </div>
+                </div>
+
+                <hr style="margin: 20px 0; border: none; border-top: 2px solid #0284c7;">
+
+                <!-- Sezione Connessione WiFi -->
+                <div style="margin-top: 20px;">
+                    <h3 style="margin-top: 0; color: #0c4a6e;">📡 Connessione WiFi</h3>
+                    <button type="button" class="btn-save" onclick="scanWiFiNetworks()" style="width: 100%; padding: 10px; margin-bottom: 10px;">
+                        🔍 Scansiona Reti WiFi
+                    </button>
+                    
+                    <div id="wifi-networks-container" style="margin-top: 15px; display: none;">
+                        <div style="background: white; border: 1px solid #0284c7; border-radius: 6px; padding: 12px;">
+                            <div id="wifi-list" style="max-height: 200px; overflow-y: auto;">
+                                <p style="text-align: center; color: #666;">Nessuna rete trovata</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sezione connessione manuale -->
+                    <div style="margin-top: 15px; padding: 12px; background: white; border-radius: 6px; border: 1px solid #0284c7;">
+                        <h4 style="margin-top: 0;">Connessione Manuale</h4>
+                        
+                        <div class="form-group">
+                            <label>SSID (Nome Rete)</label>
+                            <input type="text" id="wifi-ssid" placeholder="Nome della rete WiFi">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Password (opzionale)</label>
+                            <input type="password" id="wifi-password" placeholder="Password della rete">
+                        </div>
+
+                        <button type="button" class="btn-save" onclick="connectToWiFi()" style="width: 100%; padding: 10px;">
+                            🔐 Connetti a WiFi
+                        </button>
+                    </div>
+
+                    <!-- Bottone elimina reti salvate -->
+                    <div style="margin-top: 15px; padding: 12px; background: #fee2e2; border-radius: 6px; border: 1px solid #fca5a5;">
+                        <button type="button" class="btn-save" onclick="forgetAllWiFiNetworks()" style="width: 100%; padding: 10px; background: #dc2626; color: white;">
+                            🗑️ Cancella Tutte le Reti Salvate
+                        </button>
+                        <p style="font-size: 11px; color: #7f1d1d; margin-top: 8px; margin-bottom: 0;">
+                            ⚠️ Rimuove tutte le connessioni WiFi salvate. Il dispositivo perderà la connessione se non connesso via Ethernet.
+                        </p>
                     </div>
                 </div>
             </div>
@@ -1126,13 +1178,34 @@
                     showNotification('Errore nel riavvio: ' + (data.error || 'Errore sconosciuto'), 'error');
                 }
             })
-            .catch(err => {
-                showNotification('Servizio in riavvio, ricarica la pagina tra qualche secondo', 'warning');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 5000);
-            });
+            .catch(err => showNotification('Errore: ' + err.message, 'error'));
         }
+
+        function rebootSystem() {
+            if (!confirm('⚠️ ATTENZIONE!\n\nStai per riavviare il dispositivo.\n\nTutti i servizi verranno interrotti.\n\nContinuare?')) {
+                return;
+            }
+            
+            showNotification('🔌 Riavvio del dispositivo in corso... La connessione sarà persa.', 'warning');
+            
+            fetch('/api/system/reboot', {
+                method: 'POST'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('✅ ' + data.message, 'success');
+                    // Dopo 5 secondi, prova a ricaricare
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 10000);
+                } else {
+                    showNotification('❌ Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            })
+            .catch(err => showNotification('⚠️ Riavvio in corso... La pagina si ricaricherà automaticamente.', 'warning'));
+        }
+
 
         // Riavvia solo MJPG
         function restartMJPG() {
@@ -1354,6 +1427,109 @@
             .catch(err => showNotification('Errore di connessione: ' + err, 'error'));
         }
 
+        function scanWiFiNetworks() {
+            showNotification('🔍 Scansione reti WiFi in corso...', 'info');
+            
+            fetch('/api/wifi/scan')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.networks.length > 0) {
+                        const container = document.getElementById('wifi-networks-container');
+                        const list = document.getElementById('wifi-list');
+                        
+                        let html = '';
+                        data.networks.forEach(net => {
+                            const signal = parseInt(net.signal || 0);
+                            const signalBars = Math.min(4, Math.max(0, Math.round((signal + 100) / 25)));
+                            const bars = '📶'.repeat(signalBars) || '📡';
+                            
+                            html += `
+                                <div style="padding: 10px; border-bottom: 1px solid #e0e7ff; cursor: pointer; border-radius: 4px; margin-bottom: 5px; background: #f8fafc; transition: background 0.2s;" 
+                                     onmouseover="this.style.background='#e0f2fe'" 
+                                     onmouseout="this.style.background='#f8fafc'"
+                                     onclick="selectWiFiNetwork('${net.ssid.replace(/'/g, "\\'")}')">
+                                    <strong>${net.ssid}</strong> ${bars} ${signal}dBm
+                                </div>
+                            `;
+                        });
+                        
+                        list.innerHTML = html;
+                        container.style.display = 'block';
+                        showNotification('✅ Trovate ' + data.networks.length + ' reti WiFi', 'success');
+                    } else {
+                        showNotification('⚠️ Nessuna rete WiFi trovata', 'warning');
+                    }
+                })
+                .catch(err => showNotification('❌ Errore scansione: ' + err, 'error'));
+        }
+
+        function selectWiFiNetwork(ssid) {
+            document.getElementById('wifi-ssid').value = ssid;
+            document.getElementById('wifi-password').focus();
+            showNotification('✅ SSID selezionato: ' + ssid, 'success');
+        }
+
+        function connectToWiFi() {
+            const ssid = document.getElementById('wifi-ssid').value.trim();
+            const password = document.getElementById('wifi-password').value.trim();
+            
+            if (!ssid) {
+                showNotification('❌ SSID non specificato', 'error');
+                return;
+            }
+            
+            if (!confirm('Connettere a "' + ssid + '"?\nLa connessione potrebbe interrompersi.')) {
+                return;
+            }
+            
+            showNotification('⏳ Connessione a "' + ssid + '" in corso...', 'warning');
+            
+            const formData = new FormData();
+            formData.append('ssid', ssid);
+            formData.append('password', password);
+            formData.append('interface', 'wlan0');
+            
+            fetch('/api/wifi/connect', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('✅ ' + data.message + '\nRiconnessione in corso...', 'success');
+                    
+                    // Tenta riconnessione dopo alcuni secondi
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 8000);
+                } else {
+                    showNotification('❌ Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            })
+            .catch(err => showNotification('⚠️ Timeout (normale). Verifica la connessione...', 'warning'));
+        }
+
+        function forgetAllWiFiNetworks() {
+            if (!confirm('⚠️ ATTENZIONE!\n\nStai per cancellare TUTTE le reti WiFi salvate.\n\nSe non sei connesso via Ethernet, perderai la connessione.\n\nContinuare?')) {
+                return;
+            }
+            
+            showNotification('🗑️ Cancellazione reti WiFi...', 'warning');
+            
+            fetch('/api/wifi/forget-all', {
+                method: 'POST'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('✅ ' + data.message, 'success');
+                } else {
+                    showNotification('❌ Errore: ' + (data.error || 'Errore sconosciuto'), 'error');
+                }
+            })
+            .catch(err => showNotification('❌ Errore: ' + err.message, 'error'));
+        }
+
         function openNetworkModal() {
             document.getElementById('networkModal').style.display = 'block';
             console.log('✅ Network Modal aperto');
@@ -1364,13 +1540,14 @@
                 .then(data => {
                     console.log('[DEBUG] Network info:', data);
                     
-                    if (!data.error) {
-                        const mode = data.mode || 'DHCP';
-                        const currentIp = data.current_ip || 'N/A';
-                        const staticIp = data.static_ip || '';
-                        const gateway = data.gateway || '192.168.1.1';
-                        const dns = data.dns || '8.8.8.8';
-                        const iface = data.interface || 'wlan0';
+                    if (data.success && data.network) {
+                        const net = data.network;
+                        const mode = net.mode || 'DHCP';
+                        const currentIp = net.current_ip || 'N/A';
+                        const staticIp = net.static_ip || '';
+                        const gateway = net.gateway || '192.168.1.1';
+                        const dns = net.dns || '8.8.8.8';
+                        const iface = net.interface || 'wlan0';
                         
                         // Aggiorna i display informativi
                         document.getElementById('current-ip-display').textContent = currentIp;
@@ -1399,6 +1576,10 @@
                         
                         // Mostra log
                         console.log(`📱 IP Corrente: ${currentIp} | Modalità: ${mode}`);
+                    } else {
+                        console.error('[ERROR] Risposta non valida:', data);
+                        document.getElementById('current-ip-display').textContent = 'Errore';
+                        document.getElementById('current-mode-display').textContent = 'Errore';
                     }
                 })
                 .catch(err => {

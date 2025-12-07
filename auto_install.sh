@@ -24,7 +24,7 @@ echo ""
 
 # Step 2
 echo "[2/8] Installazione dipendenze base..."
-sudo apt install -y cmake libjpeg-dev gcc g++ git python3-pip python3-flask ffmpeg v4l-utils nginx
+sudo apt install -y cmake libjpeg-dev gcc g++ git python3-pip python3-flask ffmpeg v4l-utils nginx hostapd dnsmasq
 echo "✓ Dipendenze installate"
 echo ""
 

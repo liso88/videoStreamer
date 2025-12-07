@@ -8,17 +8,6 @@ Trasforma il tuo Raspberry Pi Zero 2W in un convertitore **Video Analogico → C
 
 
 
-sudo nano /etc/lighttpd/lighttpd.conf
-http://10.3.141.1:8080/
-admin
-secret
-
-password WiFi RasAP  ChangeMe
-
-
-SSID: videoStreamer
-IP Hotspot: 192.168.50.1
- 
 ## Caratteristiche Principali
 
 - **Dual Streaming**: MJPEG (HTTP) e RTSP (H.264) simultanei o indipendenti
@@ -71,11 +60,23 @@ L'installazione richiede circa **10-15 minuti** e configura automaticamente:
 - Flask e dipendenze Python
 - Servizi systemd per avvio automatico
 
+## Modalità Access Point (WiFi Hotspot)
+
+Il dispositivo include una **modalità hotspot WiFi automatica**: se non riesce a connettersi a una rete WiFi entro 30 secondi dal boot, attiva automaticamente un access point WiFi aperto (senza password) per consentire l'accesso all'interfaccia di configurazione.
+
+- **SSID**: `videoStreamer` (rete WiFi aperta, nessuna password)
+- **IP Hotspot**: `192.168.50.1`
+- **Accesso**: Connettiti a `videoStreamer` e apri `http://192.168.50.1` nel browser
+
+Questo permette di configurare la rete WiFi anche se il dispositivo non ha internet!
+
+
+
 ### 4. Accedi all'Interfaccia Web
 
 Apri il browser e vai su:
 ```
-http://[IP_RASPBERRY]:5000
+http://[IP_RASPBERRY]
 ```
 
 **Credenziali di default:**
@@ -308,11 +309,14 @@ ssh user@raspberry "sudo systemctl restart stream-manager"
 
 
 ## Porte Utilizzate:
-- 5000: Interfaccia web (Flask)
-- 8080: Stream MJPEG (mjpg-streamer)
-- 8554: Stream RTSP (MediaMTX)
-- 8000: RTP (MediaMTX)
-- 8001: RTCP (MediaMTX)
+| Porta | Servizio | Descrizione |
+|-------|----------|-------------|
+| 80 | Nginx (Reverse Proxy) | Accesso web all'interfaccia principale |
+| 8090 | Flask Backend | API e logica applicativa |
+| 8080 | MJPG Streamer | Stream video MJPEG (motion JPEG) |
+| 8554 | MediaMTX (RTSP) | Stream video RTSP (Real Time Streaming Protocol) |
+| 8888 | MediaMTX HLS | Stream HLS (HTTP Live Streaming) opzionale |
+| 22 | SSH | Accesso remoto via terminale |
 
 **Credenziali Default:**
 - Username: `admin`
@@ -340,7 +344,7 @@ server {
 
     # Se vuoi servire qualcosa tipo /, puntiamo a Flask
     location / {
-        proxy_pass http://127.0.0.1:5000;
+        proxy_pass http://127.0.0.1:8090;
 
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

@@ -549,18 +549,55 @@ def get_network_info():
     try:
         config = {}
         
-        # Ottieni IP corrente
+        # Ottieni IP corrente da 'ip addr' (più affidabile di hostname -I)
         try:
-            result = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
-            ips = result.stdout.strip().split()
-            config['current_ip'] = ips[0] if ips else 'N/A'
-        except:
+            result = subprocess.run(['ip', 'addr', 'show'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                current_ips = []
+                for line in lines:
+                    # Cerca pattern "inet 192.168.1.x/24"
+                    if 'inet ' in line and 'inet6' not in line:
+                        parts = line.strip().split()
+                        if len(parts) >= 2:
+                            ip_with_mask = parts[1]
+                            ip = ip_with_mask.split('/')[0]
+                            if ip != '127.0.0.1':  # Escludi loopback
+                                current_ips.append(ip)
+                config['current_ip'] = current_ips[0] if current_ips else 'N/A'
+            else:
+                config['current_ip'] = 'N/A'
+        except Exception as e:
+            print(f"[NETWORK] ⚠️  Errore lettura IP: {e}")
             config['current_ip'] = 'N/A'
+        
+        # Ottieni il gateway da 'ip route show'
+        try:
+            result = subprocess.run(['ip', 'route', 'show'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                gateway = '--'
+                for line in lines:
+                    # Cerca la linea "default via 192.168.1.1 dev wlan0"
+                    if line.startswith('default via'):
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            gateway = parts[2]
+                            break
+                config['gateway'] = gateway
+            else:
+                config['gateway'] = '--'
+        except Exception as e:
+            print(f"[NETWORK] ⚠️  Errore lettura gateway: {e}")
+            config['gateway'] = '--'
+        
+        # Defaults
+        config['mode'] = 'DHCP'
+        config['interface'] = 'wlan0'
+        config['dns'] = '--'
         
         # Leggi configurazione systemd-networkd
         systemd_network_dir = '/etc/systemd/network/'
-        config['mode'] = 'DHCP'  # Default
-        config['interface'] = 'wlan0'  # Default
         
         if os.path.exists(systemd_network_dir):
             for f in os.listdir(systemd_network_dir):
@@ -616,7 +653,7 @@ def get_network_info():
         return config
     except Exception as e:
         print(f"[NETWORK] ❌ Errore lettura configurazione rete: {e}")
-        return {'error': str(e), 'current_ip': 'N/A'}
+        return {'error': str(e), 'current_ip': 'N/A', 'mode': 'DHCP', 'interface': 'wlan0', 'gateway': '--', 'dns': '--'}
 
 
 
@@ -818,6 +855,23 @@ def api_service_restart():
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return jsonify({'success': True})
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/system/reboot', methods=['POST'])
+@login_required
+def api_system_reboot():
+    """Riavvia il sistema"""
+    try:
+        print(f"[SYSTEM] 🔄 Riavvio del dispositivo in corso...")
+        subprocess.Popen(['sudo', 'shutdown', '-r', '+0'],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return jsonify({
+            'success': True,
+            'message': '🔄 Il dispositivo si riavvierà tra pochi secondi...'
+        })
+    except Exception as e:
+        print(f"[SYSTEM] ❌ Errore riavvio: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 
@@ -1139,6 +1193,242 @@ def api_network_dhcp():
             'message': f'DHCP abilitato su {interface}'
         })
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/wifi/scan', methods=['GET'])
+@login_required
+def api_wifi_scan():
+    """Scansiona le reti WiFi disponibili"""
+    try:
+        # Usa nmcli (NetworkManager)
+        result = subprocess.run(['nmcli', 'dev', 'wifi', 'list', '--rescan', 'yes'], 
+                              capture_output=True, text=True, timeout=15)
+        
+        networks = []
+        
+        # Parsing output nmcli - formato:
+        # IN-USE  BSSID              SSID                  MODE   CHAN  RATE        SIGNAL  BARS  SECURITY
+        lines = result.stdout.split('\n')
+        for line in lines[1:]:  # Skip header
+            if line.strip() and not line.startswith('IN-USE'):
+                try:
+                    # Parsing manuale basato su posizioni fisse
+                    parts = line.split()
+                    if len(parts) >= 6:
+                        # IN-USE è la prima colonna (spesso vuota o "*")
+                        # BSSID è la seconda
+                        # SSID dovrebbe essere dopo BSSID
+                        
+                        # Approccio: estrai BSSID (formato XX:XX:XX:XX:XX:XX) e signal
+                        import re
+                        
+                        # Cerca BSSID
+                        bssid_match = re.search(r'([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2})', line)
+                        if bssid_match:
+                            bssid = bssid_match.group(1)
+                            bssid_pos = line.find(bssid)
+                            
+                            # SSID è tra BSSID e MODE (Infra)
+                            rest = line[bssid_pos + len(bssid):].strip()
+                            
+                            # Trova "Infra" per separare SSID dal resto
+                            mode_pos = rest.find('Infra')
+                            if mode_pos > 0:
+                                ssid = rest[:mode_pos].strip()
+                                rest_after_mode = rest[mode_pos:].split()
+                                
+                                # Formato dopo Infra: CHAN RATE SIGNAL ...
+                                if len(rest_after_mode) >= 4:
+                                    signal = rest_after_mode[3]  # Signal è il 4° elemento dopo Infra
+                                    
+                                    # Filtra SSID vuoti
+                                    if ssid and ssid != '*':
+                                        networks.append({
+                                            'ssid': ssid,
+                                            'bssid': bssid,
+                                            'signal': signal
+                                        })
+                except Exception as parse_err:
+                    print(f"[WIFI] ⚠️  Errore parsing riga: {parse_err}")
+                    pass
+        
+        # Deduplicazione: tieni la rete con segnale più forte
+        unique_networks = {}
+        for net in networks:
+            ssid = net['ssid']
+            try:
+                net_signal = int(net.get('signal', '0'))
+                existing_signal = int(unique_networks.get(ssid, {}).get('signal', '0'))
+                if ssid not in unique_networks or net_signal > existing_signal:
+                    unique_networks[ssid] = net
+            except:
+                if ssid not in unique_networks:
+                    unique_networks[ssid] = net
+        
+        print(f"[WIFI] ✅ Trovate {len(unique_networks)} reti WiFi")
+        return jsonify({
+            'success': True,
+            'networks': list(unique_networks.values())
+        })
+    except Exception as e:
+        print(f"[WIFI] ❌ Errore scansione: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/wifi/connect', methods=['POST'])
+@login_required
+def api_wifi_connect():
+    """Connetti a una rete WiFi"""
+    try:
+        ssid = request.form.get('ssid', '').strip()
+        password = request.form.get('password', '').strip()
+        interface = request.form.get('interface', 'wlan0').strip()
+        
+        if not ssid:
+            return jsonify({'success': False, 'error': 'SSID non specificato'})
+        
+        print(f"[WIFI] 🔄 Connessione a: {ssid}")
+        
+        # Prima rimuovi eventuali connessioni esistenti con lo stesso SSID
+        print(f"[WIFI] Rimozione connessioni precedenti...")
+        subprocess.run(['sudo', 'nmcli', 'connection', 'delete', ssid], 
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Usa nmcli per salvare la connessione WiFi
+        if password:
+            # Connessione con password WPA2
+            cmd = [
+                'sudo', 'nmcli', 'connection', 'add',
+                'type', 'wifi',
+                'ifname', interface,
+                'con-name', ssid,
+                'autoconnect', 'yes',
+                'ssid', ssid,
+                'wifi-sec.key-mgmt', 'wpa-psk',
+                'wifi-sec.psk', password
+            ]
+            print(f"[WIFI] Comando: sudo nmcli connection add type wifi ifname {interface} con-name {ssid} ssid {ssid} wifi-sec.key-mgmt wpa-psk")
+        else:
+            # Connessione open (senza password)
+            cmd = [
+                'sudo', 'nmcli', 'connection', 'add',
+                'type', 'wifi',
+                'ifname', interface,
+                'con-name', ssid,
+                'autoconnect', 'yes',
+                'ssid', ssid
+            ]
+            print(f"[WIFI] Comando: sudo nmcli connection add type wifi ifname {interface} con-name {ssid} ssid {ssid}")
+        
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or "Errore sconosciuto"
+            print(f"[WIFI] ❌ Errore connessione: {error_msg}")
+            return jsonify({'success': False, 'error': error_msg})
+        
+        print(f"[WIFI] ✅ Profilo creato: {ssid}")
+        print(f"[WIFI] Output: {result.stdout.strip()}")
+        
+        # Attiva la connessione
+        print(f"[WIFI] 🔄 Attivazione connessione...")
+        activate_result = subprocess.run(
+            ['sudo', 'nmcli', 'connection', 'up', ssid],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20
+        )
+        
+        if activate_result.returncode != 0:
+            error_msg = activate_result.stderr or activate_result.stdout or "Errore attivazione"
+            print(f"[WIFI] ⚠️  Avviso attivazione: {error_msg}")
+        else:
+            print(f"[WIFI] ✅ Connessione attivata: {ssid}")
+        
+        # Salva la configurazione di rete in un file per persistenza
+        try:
+            network_save_file = '/etc/videostreamer_wifi.conf'
+            with open('/tmp/videostreamer_wifi.conf', 'w') as f:
+                f.write(f"SSID={ssid}\n")
+                f.write(f"PASSWORD={password}\n")
+                f.write(f"INTERFACE={interface}\n")
+            subprocess.run(['sudo', 'cp', '/tmp/videostreamer_wifi.conf', network_save_file],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"[WIFI] ✅ Configurazione salvata in {network_save_file}")
+        except Exception as save_err:
+            print(f"[WIFI] ⚠️  Avviso: non posso salvare config: {save_err}")
+        
+        # Avvia reboot dopo 3 secondi per applicare la configurazione
+        print(f"[WIFI] 🔄 Reboot tra 3 secondi...")
+        subprocess.Popen(['sudo', 'shutdown', '-r', '+0'], 
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        return jsonify({
+            'success': True,
+            'message': f'✅ Connessione salvata! Il dispositivo si riavvierà tra pochi secondi...'
+        })
+    except Exception as e:
+        print(f"[WIFI] ❌ Eccezione: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/wifi/forget-all', methods=['POST'])
+@login_required
+def api_wifi_forget_all():
+    """Cancella tutte le connessioni WiFi salvate"""
+    try:
+        print(f"[WIFI] 🗑️  Cancellazione di tutte le connessioni WiFi salvate...")
+        
+        # Cancella tutte le connessioni via nmcli
+        result = subprocess.run(
+            ['sudo', 'nmcli', 'connection', 'show'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10
+        )
+        
+        connections = []
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                parts = line.split()
+                if parts:
+                    conn_name = parts[0]
+                    if conn_name and conn_name != 'NAME':
+                        connections.append(conn_name)
+        
+        deleted_count = 0
+        for conn_name in connections:
+            try:
+                delete_result = subprocess.run(
+                    ['sudo', 'nmcli', 'connection', 'delete', conn_name],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10
+                )
+                if delete_result.returncode == 0:
+                    print(f"[WIFI] ✅ Eliminato profilo: {conn_name}")
+                    deleted_count += 1
+            except Exception as e:
+                print(f"[WIFI] ⚠️  Errore eliminazione {conn_name}: {e}")
+        
+        # Cancella il file di configurazione se esiste
+        try:
+            subprocess.run(['sudo', 'rm', '-f', '/etc/videostreamer_wifi.conf'],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"[WIFI] ✅ File configurazione eliminato")
+        except:
+            pass
+        
+        # Cancella la cartella di NetworkManager
+        try:
+            subprocess.run(['sudo', 'rm', '-rf', '/etc/NetworkManager/system-connections/*'],
+                          shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"[WIFI] ✅ Connessioni di sistema eliminate")
+        except:
+            pass
+        
+        print(f"[WIFI] ✅ Completato: {deleted_count} profili eliminati")
+        return jsonify({
+            'success': True,
+            'message': f'✅ {deleted_count} connessioni WiFi eliminate. Tutte le reti salvate sono state rimosse.'
+        })
+    except Exception as e:
+        print(f"[WIFI] ❌ Eccezione: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 
