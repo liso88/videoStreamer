@@ -650,7 +650,7 @@
             <!-- Sezione informazioni correnti -->
             <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                 <h3 style="margin-top: 0; color: #166534;">📊 Stato Attuale</h3>
-                <div style="display: grid; gap: 10px;">
+                <div style="display: grid;">
                     <div>
                         <strong style="color: #065f46;">IP Corrente:</strong>
                         <span id="current-ip-display" style="color: #0f766e; font-weight: bold;">Caricamento...</span>
@@ -684,13 +684,13 @@
                 <div style="margin-top: 15px;">
                     <label><strong>Configurazione Indirizzo IP</strong></label>
                     <div style="margin-top: 10px;">
-                        <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <label style="display: flex; align-items: center; margin-bottom: 10px;">
                             <input type="radio" name="ip-mode" value="dhcp" id="ip-dhcp" checked>
-                            <span>🔄 DHCP (Automatico)</span>
+                            <span>DHCP (Automatico)</span>
                         </label>
                         <label style="display: flex; align-items: center; gap: 10px;">
                             <input type="radio" name="ip-mode" value="static" id="ip-static">
-                            <span>🔧 IP Statico</span>
+                            <span>IP Statico</span>
                         </label>
                     </div>
 
@@ -1551,7 +1551,7 @@
                         
                         // Aggiorna i display informativi
                         document.getElementById('current-ip-display').textContent = currentIp;
-                        document.getElementById('current-mode-display').textContent = mode === 'STATIC' ? '🔧 IP Statico' : '🔄 DHCP (Automatico)';
+                        document.getElementById('current-mode-display').textContent = mode === 'STATIC' ? 'IP Statico' : 'DHCP (Automatico)';
                         document.getElementById('current-gateway-display').textContent = gateway || '--';
                         
                         // Aggiorna i radio button
