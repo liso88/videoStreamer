@@ -60,17 +60,6 @@ L'installazione richiede circa **10-15 minuti** e configura automaticamente:
 - Flask e dipendenze Python
 - Servizi systemd per avvio automatico
 
-## Modalità Access Point (WiFi Hotspot)
-
-Il dispositivo include una **modalità hotspot WiFi automatica**: se non riesce a connettersi a una rete WiFi entro 30 secondi dal boot, attiva automaticamente un access point WiFi aperto (senza password) per consentire l'accesso all'interfaccia di configurazione.
-
-- **SSID**: `videoStreamer` (rete WiFi aperta, nessuna password)
-- **IP Hotspot**: `192.168.50.1`
-- **Accesso**: Connettiti a `videoStreamer` e apri `http://192.168.50.1` nel browser
-
-Questo permette di configurare la rete WiFi anche se il dispositivo non ha internet!
-
-
 
 ### 4. Accedi all'Interfaccia Web
 
@@ -84,6 +73,18 @@ http://[IP_RASPBERRY]
 - Password: `admin`
 
  **IMPORTANTE**: Cambia la password immediatamente dopo il primo accesso!
+
+
+
+### 5. Modalità Access Point (WiFi Hotspot)
+
+Il dispositivo include una **modalità hotspot WiFi automatica**: se non riesce a connettersi a una rete WiFi entro 30 secondi dal boot, attiva automaticamente un access point WiFi aperto (senza password) per consentire l'accesso all'interfaccia di configurazione.
+
+- **SSID**: `videoStreamer` (rete WiFi aperta, nessuna password)
+- **IP Hotspot**: `192.168.50.1`
+- **Accesso**: Connettiti a `videoStreamer` e apri `http://192.168.50.1` nel browser
+
+Questo permette di configurare la rete WiFi anche se il dispositivo non ha accesso alla rete locale.
 
 
 
