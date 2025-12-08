@@ -381,6 +381,16 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 
 ## Changelog
 
+### Version  v2.20251208 
+
+- Modalità Access Point
+- Riavvio Dispositivo
+- Fix cambio password
+- Fix selezione rete
+- Fix autoinstall
+- Rimozione funzioni obsolete
+- Fix Sovrapposizione porte
+  
 ### Version  v1.20251203 - Security Update 
 
 - Autenticazione stream MJPEG con HTTP Basic
