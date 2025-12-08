@@ -2,6 +2,7 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎥</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="page-title">Video Stream Manager</title>
     <style>
@@ -23,6 +24,21 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             margin-bottom: 20px;
         }
+
+        h1::before {
+            content: "";
+            display: block;
+            height: 8px;
+            margin: 8px auto;
+            background-image: linear-gradient(to bottom, #333 0px, #333 4px, /* linea SPESSA (4px) sopra */ transparent 4px, transparent 6px, #333 6px, #333 8px /* linea SOTTILE (2px) sotto */);
+        }
+        h1::after {
+            content: "";
+            display: block;
+            height: 8px;
+            margin: 8px auto;
+            background-image: linear-gradient(to bottom, #333 0px, #333 2px, /* linea SOTTILE (2px) sopra */ transparent 2px, transparent 4px, #333 4px, #333 8px /* linea SPESSA (4px) sotto */);
+        }
         .header h1 {
             color: #333;
             margin-bottom: 5px;
@@ -32,6 +48,10 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
+            text-align: center;
+            justify-content: center;
+            font-family: "Bodoni MT", "Bodoni", "Didot", "Times New Roman", serif;
+
         }
         .header-subtitle {
             color: #666;
@@ -40,7 +60,9 @@
         .header-buttons {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
+        
         .config-info-box {
             margin-top: 10px;
             padding: 10px 12px;
@@ -351,6 +373,8 @@
                     <h1>Video Stream Manager</h1>
                     <p class="header-subtitle">Converti una sorgente video in uno stream</p>
                 </div>
+            </div>
+            <div class="header-top">
                 <div class="header-buttons">
                     <button class="btn-restart" onclick="restartService()" title="Riavvia il servizio stream-manager">
                         🔄 Riavvia Servizio
@@ -502,7 +526,7 @@
             <div class="stream-preview">
                 <strong>URL Stream:</strong>
                 <div class="stream-url" id="mjpg-url" title="Clicca per copiare l'URL" style="cursor: pointer;" onclick="copyMjpgUrl()">
-                    <a href="http://[IP_RASPBERRY]:8080/?action=stream" id="mjpg-url-link" target="_blank" style="color: inherit;" onclick="return copyMjpgUrl()">http://[IP_RASPBERRY]:8080/?action=stream</a>
+                    <a href="http://[IP_RASPBERRY]:8080/?action=stream" id="mjpg-url-link" target="_blank" style="color: inherit;"></a>
                 </div>
             </div>
         </div>
@@ -633,7 +657,7 @@
                     <a href="#" id="rtsp-url-link" style="color: inherit; text-decoration: none;" onclick="return copyRtspUrl()">rtsp://[IP_RASPBERRY]:8554/video</a>
                 </div>
                 <p style="margin-top: 10px; color: #666; font-size: 14px;">
-                    💡 Clicca per copiare • Usa VLC o altro player RTSP per visualizzare lo stream
+                Clicca per copiare • Usa VLC o altro player RTSP per visualizzare lo stream
                 </p>
             </div>
         </div>
@@ -684,7 +708,7 @@
                 <div style="margin-top: 15px;">
                     <label><strong>Configurazione Indirizzo IP</strong></label>
                     <div style="margin-top: 10px;">
-                        <label style="display: flex; align-items: center; margin-bottom: 10px;">
+                        <label style="display: flex; align-items: center; margin-bottom: 10px; gap: 10px;">
                             <input type="radio" name="ip-mode" value="dhcp" id="ip-dhcp" checked>
                             <span>DHCP (Automatico)</span>
                         </label>

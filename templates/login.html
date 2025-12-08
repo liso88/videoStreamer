@@ -2,6 +2,7 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎥</text></svg>">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Stream Manager</title>
     <style>
@@ -29,11 +30,29 @@
         .login-header h1 {
             color: #333;
             margin-bottom: 10px;
+            font-family: "Bodoni MT", "Bodoni", "Didot", "Times New Roman", serif;
         }
+
+        h1::before {
+            content: "";
+            display: block;
+            height: 8px;
+            margin: 8px auto;
+            background-image: linear-gradient(to bottom, #333 0px, #333 4px, /* linea SPESSA (4px) sopra */ transparent 4px, transparent 6px, #333 6px, #333 8px /* linea SOTTILE (2px) sotto */);
+        }
+        h1::after {
+            content: "";
+            display: block;
+            height: 8px;
+            margin: 8px auto;
+            background-image: linear-gradient(to bottom, #333 0px, #333 2px, /* linea SOTTILE (2px) sopra */ transparent 2px, transparent 4px, #333 4px, #333 8px /* linea SPESSA (4px) sotto */);
+        }
+        
         .login-header p {
             color: #666;
             font-size: 14px;
         }
+    
         .form-group {
             margin-bottom: 20px;
         }
@@ -98,8 +117,9 @@
 <body>
     <div class="login-container">
         <div class="login-header">
-            <h1>🎥 Stream Manager</h1>
-            <p>Accedi per gestire i tuoi stream</p>
+        <img src="../static/stemma_small.png" alt="Stemma" style="height: 70px; vertical-align: middle;">
+        <h1>Video Stream Manager</h1>
+            <p>Accedi per configurare il dispositivo</p>
         </div>
 
         {% if error %}
