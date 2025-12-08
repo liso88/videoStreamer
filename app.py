@@ -23,6 +23,10 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(APP_DIR, 'stream_config.json')
 AUTH_FILE = os.path.join(APP_DIR, 'stream_auth.json')
 
+# Tracker per i processi FFmpeg
+rtsp_ffmpeg_process = None
+mjpg_ffmpeg_process = None
+
 # Configurazione di default
 DEFAULT_CONFIG = {
     'mjpg': {
@@ -410,7 +414,8 @@ def start_rtsp_stream(config):
             '-bufsize', '2000k',
             '-s', config['resolution'],
             '-r', str(config['framerate']),
-            '-an',  # Disabilita audio per stabilità RTSP
+            '-c:a', 'aac',  # Codec audio AAC
+            '-b:a', '64k',  # Bitrate audio
             '-f', 'rtsp',
             rtsp_url
         ]
@@ -424,20 +429,20 @@ def start_rtsp_stream(config):
             
         print(f"[RTSP] Usando dispositivo: {device}")
         
+        # FFmpeg cattura da V4L2 (video) - senza audio per velocità su Pi Zero
         cmd = [
             'ffmpeg',
             '-f', 'v4l2',
-            '-input_format', 'mjpeg',
             '-video_size', config['resolution'],
             '-framerate', str(config['framerate']),
             '-i', device,
-            '-c:v', 'libx264',
-            '-preset', 'veryfast',
-            '-tune', 'zerolatency',
-            '-b:v', config['bitrate'],
-            '-maxrate', config['bitrate'],
-            '-bufsize', '2000k',
-            '-an',  # Disabilita audio
+            '-c:v', 'libx264',  # Codec video H.264
+            '-preset', 'ultrafast',  # Velocissimo per Pi Zero
+            '-b:v', '300k',  # Bitrate video molto basso per velocità
+            '-maxrate', '400k',  # Max bitrate per evitare picchi
+            '-bufsize', '500k',  # Buffer piccolo
+            '-vf', 'format=yuv420p',  # Converte a YUV420 (formato standard RTSP)
+            '-an',  # Disabilita audio per velocità
             '-f', 'rtsp',
             rtsp_url
         ]
@@ -453,6 +458,10 @@ def start_rtsp_stream(config):
             stderr=subprocess.PIPE
         )
         
+        # Salva il PID globale per stop successivo
+        global rtsp_ffmpeg_process
+        rtsp_ffmpeg_process = process
+        
         # Attendi per verificare se si avvia
         time.sleep(2)
         
@@ -460,6 +469,7 @@ def start_rtsp_stream(config):
             stdout, stderr = process.communicate()
             error_msg = stderr.decode() if stderr else "Processo terminato immediatamente"
             print(f"[RTSP] ❌ Errore FFmpeg: {error_msg}")
+            rtsp_ffmpeg_process = None
             raise Exception(f"FFmpeg non si avvia: {error_msg}")
         
         print(f"[RTSP] ✅ FFmpeg avviato con successo (PID: {process.pid})")
@@ -467,13 +477,44 @@ def start_rtsp_stream(config):
         
     except Exception as e:
         print(f"[RTSP] ❌ Eccezione: {str(e)}")
+        rtsp_ffmpeg_process = None
         raise
 
 
 def stop_rtsp_stream():
     """Ferma lo streaming RTSP"""
-    subprocess.run(['pkill', '-f', 'ffmpeg.*rtsp'], shell=True, stderr=subprocess.DEVNULL)
-    subprocess.run(['sudo', 'systemctl', 'stop', 'mediamtx'], stderr=subprocess.DEVNULL)
+    global rtsp_ffmpeg_process
+    
+    print("[RTSP] 🛑 Tentativo di fermare RTSP...")
+    
+    # Ferma il processo FFmpeg tracciato
+    if rtsp_ffmpeg_process is not None:
+        try:
+            print(f"[RTSP] Uccisione processo FFmpeg (PID: {rtsp_ffmpeg_process.pid})...")
+            rtsp_ffmpeg_process.terminate()  # SIGTERM
+            rtsp_ffmpeg_process.wait(timeout=3)
+            print("[RTSP] ✅ FFmpeg terminato gracefully")
+        except subprocess.TimeoutExpired:
+            print("[RTSP] ⚠️  FFmpeg non ha risposto, forza kill...")
+            rtsp_ffmpeg_process.kill()  # SIGKILL
+            rtsp_ffmpeg_process.wait()
+            print("[RTSP] ✅ FFmpeg ucciso")
+        except Exception as e:
+            print(f"[RTSP] ⚠️  Errore kill FFmpeg: {e}")
+        finally:
+            rtsp_ffmpeg_process = None
+    else:
+        print("[RTSP] ℹ️  Nessun processo FFmpeg tracciato")
+    
+    # Ferma anche MediaMTX
+    try:
+        subprocess.run(['sudo', 'systemctl', 'stop', 'mediamtx'], 
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        print("[RTSP] ✅ MediaMTX fermato")
+    except Exception as e:
+        print(f"[RTSP] ⚠️  Errore stop MediaMTX: {e}")
+    
+    print("[RTSP] ✅ Stream RTSP completamente fermato")
     return True
 
 
