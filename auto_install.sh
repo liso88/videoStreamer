@@ -28,10 +28,55 @@ sudo apt install -y cmake libjpeg-dev gcc g++ git python3-pip python3-flask ffmp
 echo "✓ Dipendenze installate"
 echo ""
 
+# Step 2b - Configurazione Nginx come reverse proxy
+echo "[2b/8] Configurazione Nginx come reverse proxy..."
+sudo tee /etc/nginx/sites-available/stream-manager > /dev/null <<'EOF'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    client_max_body_size 2000M;
+
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }
+}
+EOF
+
+# Abilita il sito nginx
+sudo rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+sudo ln -sf /etc/nginx/sites-available/stream-manager /etc/nginx/sites-enabled/stream-manager 2>/dev/null || true
+
+# Test configurazione nginx
+sudo nginx -t && echo "✓ Configurazione Nginx OK" || echo "⚠️  Errore configurazione Nginx"
+
+# Abilita e avvia nginx
+sudo systemctl enable nginx
+sudo systemctl restart nginx
+echo "✓ Nginx configurato come reverse proxy"
+echo ""
+
 # Step 3
 echo "[3/8] Installazione librerie Python..."
 pip3 install flask psutil --break-system-packages
 echo "✓ Librerie Python installate"
+echo ""
+
+# Step 3b
+echo "[3b/8] Configurazione permessi dispositivi..."
+sudo usermod -a -G video,dialout,plugdev $USER
+sudo chmod a+rw /dev/video* 2>/dev/null || true
+echo "✓ Permessi dispositivi configurati"
+echo "⚠️  Potrebbe essere necessario effettuare il logout e login per applicare i permessi di gruppo"
 echo ""
 
 # Step 4

@@ -1613,5 +1613,5 @@ if __name__ == '__main__':
     time.sleep(5)
     autostart_streams()
 
-    print("🌐 Avvio server web sulla porta 8090...")
-    app.run(host='0.0.0.0', port=8090, debug=False)
+    print("🌐 Avvio server web sulla porta 5000...")
+    app.run(host='0.0.0.0', port=5000, debug=False)
