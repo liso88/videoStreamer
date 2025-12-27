@@ -671,7 +671,34 @@ def get_network_info():
                     except Exception as e:
                         print(f"[NETWORK] ⚠️  Errore lettura {f}: {e}")
         
-        # Se nessuno trovato, prova /etc/network/interfaces.d/
+        # Se nessuno trovato, prova /etc/dhcpcd.conf (metodo tradizionale Raspberry Pi)
+        if config['mode'] == 'DHCP':
+            dhcpcd_conf = '/etc/dhcpcd.conf'
+            if os.path.exists(dhcpcd_conf):
+                try:
+                    with open(dhcpcd_conf, 'r') as file:
+                        content = file.read()
+                        # Cerca configurazione statica per l'interfaccia
+                        in_interface_section = False
+                        for line in content.split('\n'):
+                            line = line.strip()
+                            # Verifica se siamo nella sezione dell'interfaccia
+                            if line.startswith(f'interface {config["interface"]}'):
+                                in_interface_section = True
+                                config['mode'] = 'STATIC'
+                            elif in_interface_section:
+                                if line.startswith('interface '):
+                                    in_interface_section = False
+                                elif line.startswith('static ip_address='):
+                                    config['static_ip'] = line.split('=')[1]
+                                elif line.startswith('static routers='):
+                                    config['gateway'] = line.split('=')[1]
+                                elif line.startswith('static domain_name_servers='):
+                                    config['dns'] = line.split('=')[1]
+                except Exception as e:
+                    print(f"[NETWORK] ⚠️  Errore lettura /etc/dhcpcd.conf: {e}")
+        
+        # Se ancora DHCP, prova /etc/network/interfaces.d/
         if config['mode'] == 'DHCP' and not os.path.exists(systemd_network_dir):
             interfaces_dir = '/etc/network/interfaces.d/'
             if os.path.exists(interfaces_dir):
@@ -711,7 +738,7 @@ def _cidr_to_netmask(cidr):
 
 
 def set_static_ip(interface, ip_address, netmask, gateway, dns):
-    """Configura IP statico via systemd-networkd su Raspberry Pi Bookworm"""
+    """Configura IP statico sia su dhcpcd che systemd-networkd (compatibilità Raspberry Pi)"""
     try:
         # Validazione indirizzi IP
         import ipaddress
@@ -721,10 +748,48 @@ def set_static_ip(interface, ip_address, netmask, gateway, dns):
             for d in dns.split(','):
                 ipaddress.IPv4Address(d.strip())
         
-        # Crea configurazione per systemd-networkd
         netmask_decimal = _cidr_to_netmask(int(netmask))
         
-        systemd_config = f"""[Match]
+        # ===== METODO 1: dhcpcd.conf (tradizionale Raspberry Pi) =====
+        dhcpcd_conf = '/etc/dhcpcd.conf'
+        try:
+            # Leggi il file se esiste
+            if os.path.exists(dhcpcd_conf):
+                with open(dhcpcd_conf, 'r') as f:
+                    dhcpcd_content = f.read()
+            else:
+                dhcpcd_content = ""
+            
+            # Rimuovi la sezione interface se esiste già
+            import re
+            dhcpcd_content = re.sub(
+                f'interface {interface}\n(?:.*\n)*?(?=\ninterface |$)',
+                '',
+                dhcpcd_content
+            )
+            
+            # Aggiungi la nuova configurazione
+            dhcpcd_config = f"\n# Configurazione IP statico per {interface}\ninterface {interface}\n"
+            dhcpcd_config += f"    static ip_address={ip_address}/{netmask}\n"
+            dhcpcd_config += f"    static routers={gateway}\n"
+            dhcpcd_config += f"    static domain_name_servers={dns}\n"
+            
+            dhcpcd_content += dhcpcd_config
+            
+            # Scrivi il file temporaneo e copia con sudo
+            config_file = '/tmp/dhcpcd.conf.new'
+            with open(config_file, 'w') as f:
+                f.write(dhcpcd_content)
+            
+            subprocess.run(['sudo', 'cp', config_file, dhcpcd_conf], 
+                          check=True, capture_output=True)
+            print(f"[NETWORK] ✅ /etc/dhcpcd.conf aggiornato")
+        except Exception as e:
+            print(f"[NETWORK] ⚠️  Errore aggiornamento dhcpcd.conf: {e}")
+        
+        # ===== METODO 2: systemd-networkd (Raspberry Pi Bookworm) =====
+        try:
+            systemd_config = f"""[Match]
 Name={interface}
 
 [Network]
@@ -737,25 +802,38 @@ IPv6AcceptRA=no
 Destination=0.0.0.0/0
 Gateway={gateway}
 """
+            
+            # Scrivi il file
+            config_file = f'/tmp/99-{interface}-static.network'
+            with open(config_file, 'w') as f:
+                f.write(systemd_config)
+            
+            # Applica il file
+            target_file = f'/etc/systemd/network/99-{interface}-static.network'
+            subprocess.run(['sudo', 'mkdir', '-p', '/etc/systemd/network'], 
+                          capture_output=True)
+            subprocess.run(['sudo', 'cp', config_file, target_file], 
+                          check=True, capture_output=True)
+            print(f"[NETWORK] ✅ /etc/systemd/network aggiornato")
+        except Exception as e:
+            print(f"[NETWORK] ⚠️  Errore aggiornamento systemd-networkd: {e}")
         
-        # Scrivi il file
-        config_file = f'/tmp/99-{interface}-static.network'
-        with open(config_file, 'w') as f:
-            f.write(systemd_config)
+        # Riavvia i servizi di rete
+        try:
+            subprocess.run(['sudo', 'systemctl', 'restart', 'dhcpcd'], 
+                          capture_output=True, timeout=5)
+            print(f"[NETWORK] ✅ dhcpcd riavviato")
+        except:
+            pass
         
-        # Applica il file
-        target_file = f'/etc/systemd/network/99-{interface}-static.network'
-        subprocess.run(['sudo', 'mkdir', '-p', '/etc/systemd/network'], 
-                      capture_output=True)
-        subprocess.run(['sudo', 'cp', config_file, target_file], 
-                      check=True, capture_output=True)
-        print(f"[NETWORK] ✅ Configurazione salvata in {target_file}")
+        try:
+            subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-networkd'], 
+                          capture_output=True, timeout=10)
+            print(f"[NETWORK] ✅ systemd-networkd riavviato")
+        except:
+            pass
         
-        # Riavvia systemd-networkd
-        subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-networkd'], 
-                      capture_output=True, timeout=10)
-        print(f"[NETWORK] ✅ systemd-networkd riavviato")
-        print(f"[NETWORK] ℹ️  IP statico: {ip_address}/{netmask}, Gateway: {gateway}")
+        print(f"[NETWORK] ℹ️  IP statico configurato: {ip_address}/{netmask}, Gateway: {gateway}")
         return True
     except Exception as e:
         print(f"[NETWORK] ❌ Errore configurazione IP statico: {e}")
@@ -764,37 +842,80 @@ Gateway={gateway}
 
 
 def set_dhcp(interface):
-    """Configura DHCP via systemd-networkd"""
+    """Configura DHCP sia su dhcpcd che systemd-networkd (compatibilità Raspberry Pi)"""
     try:
-        # Crea configurazione per systemd-networkd
-        systemd_config = f"""[Match]
+        # ===== METODO 1: dhcpcd.conf (tradizionale Raspberry Pi) =====
+        dhcpcd_conf = '/etc/dhcpcd.conf'
+        try:
+            if os.path.exists(dhcpcd_conf):
+                with open(dhcpcd_conf, 'r') as f:
+                    dhcpcd_content = f.read()
+                
+                # Rimuovi la sezione interface se esiste
+                import re
+                dhcpcd_content = re.sub(
+                    f'interface {interface}\n(?:.*\n)*?(?=\ninterface |$)',
+                    '',
+                    dhcpcd_content
+                )
+                
+                # Scrivi il file senza la configurazione statica
+                config_file = '/tmp/dhcpcd.conf.new'
+                with open(config_file, 'w') as f:
+                    f.write(dhcpcd_content)
+                
+                subprocess.run(['sudo', 'cp', config_file, dhcpcd_conf], 
+                              check=True, capture_output=True)
+                print(f"[NETWORK] ✅ /etc/dhcpcd.conf: configurazione statica rimossa")
+        except Exception as e:
+            print(f"[NETWORK] ⚠️  Errore aggiornamento dhcpcd.conf: {e}")
+        
+        # ===== METODO 2: systemd-networkd (Raspberry Pi Bookworm) =====
+        try:
+            # Crea configurazione per systemd-networkd
+            systemd_config = f"""[Match]
 Name={interface}
 
 [Network]
 DHCP=yes
 IPv6AcceptRA=yes
 """
+            
+            # Scrivi il file
+            config_file = f'/tmp/99-{interface}-dhcp.network'
+            with open(config_file, 'w') as f:
+                f.write(systemd_config)
+            
+            # Applica il file
+            target_file = f'/etc/systemd/network/99-{interface}-dhcp.network'
+            subprocess.run(['sudo', 'mkdir', '-p', '/etc/systemd/network'], 
+                          capture_output=True)
+            subprocess.run(['sudo', 'cp', config_file, target_file], 
+                          check=True, capture_output=True)
+            
+            # Rimuovi eventuali configurazioni statiche
+            subprocess.run(['sudo', 'rm', '-f', f'/etc/systemd/network/99-{interface}-static.network'], 
+                          capture_output=True)
+            print(f"[NETWORK] ✅ /etc/systemd/network aggiornato")
+        except Exception as e:
+            print(f"[NETWORK] ⚠️  Errore aggiornamento systemd-networkd: {e}")
         
-        # Scrivi il file
-        config_file = f'/tmp/99-{interface}-dhcp.network'
-        with open(config_file, 'w') as f:
-            f.write(systemd_config)
+        # Riavvia i servizi di rete
+        try:
+            subprocess.run(['sudo', 'systemctl', 'restart', 'dhcpcd'], 
+                          capture_output=True, timeout=5)
+            print(f"[NETWORK] ✅ dhcpcd riavviato")
+        except:
+            pass
         
-        # Applica il file
-        target_file = f'/etc/systemd/network/99-{interface}-dhcp.network'
-        subprocess.run(['sudo', 'mkdir', '-p', '/etc/systemd/network'], 
-                      capture_output=True)
-        subprocess.run(['sudo', 'cp', config_file, target_file], 
-                      check=True, capture_output=True)
+        try:
+            subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-networkd'], 
+                          capture_output=True, timeout=10)
+            print(f"[NETWORK] ✅ systemd-networkd riavviato")
+        except:
+            pass
         
-        # Rimuovi eventuali configurazioni statiche
-        subprocess.run(['sudo', 'rm', '-f', f'/etc/systemd/network/99-{interface}-static.network'], 
-                      capture_output=True)
-        
-        # Riavvia systemd-networkd
-        subprocess.run(['sudo', 'systemctl', 'restart', 'systemd-networkd'], 
-                      capture_output=True, timeout=10)
-        print(f"[NETWORK] ✅ DHCP abilitato su {interface}")
+        print(f"[NETWORK] ℹ️  DHCP abilitato su {interface}")
         return True
     except Exception as e:
         print(f"[NETWORK] ❌ Errore configurazione DHCP: {e}")
@@ -850,6 +971,8 @@ def api_status():
         'system': get_system_info(),
         'config': config
     })
+
+
 
 
 @app.route('/api/config')
