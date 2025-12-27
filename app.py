@@ -25,7 +25,6 @@ AUTH_FILE = os.path.join(APP_DIR, 'stream_auth.json')
 
 # Tracker per i processi FFmpeg
 rtsp_ffmpeg_process = None
-mjpg_ffmpeg_process = None
 
 # Configurazione di default
 DEFAULT_CONFIG = {
@@ -116,17 +115,6 @@ def login_required(f):
     return decorated_function
 
 
-def create_htpasswd_file(username, password, filename):
-    """Crea file .htpasswd per autenticazione HTTP Basic"""
-    # Usa crypt per generare hash compatibile con Apache
-    import crypt
-    password_hash = crypt.crypt(password, crypt.mksalt(crypt.METHOD_SHA512))
-    
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    with open(filename, 'w') as f:
-        f.write(f"{username}:{password_hash}\n")
-    os.chmod(filename, 0o600)
-
 def update_mediamtx_config(rtsp_config):
     """Aggiorna configurazione MediaMTX con autenticazione"""
     auth_enabled = rtsp_config.get('auth_enabled', False)
@@ -166,20 +154,6 @@ hlsAddress: :8888
         ['sudo', 'cp', '/tmp/mediamtx.yml', '/etc/mediamtx/mediamtx.yml'],
         check=True
     )
-
-
-def get_video_files():
-    """Ottiene la lista dei video disponibili"""
-    video_dir = os.path.join(APP_DIR, 'videos')
-    if not os.path.exists(video_dir):
-        os.makedirs(video_dir, exist_ok=True)
-        return []
-
-    video_files = []
-    for f in os.listdir(video_dir):
-        if f.lower().endswith(('.mp4', '.avi', '.mkv', '.mov', '.mpg', '.mpeg')):
-            video_files.append(os.path.join(video_dir, f))
-    return video_files
 
 
 def is_process_running(pattern):

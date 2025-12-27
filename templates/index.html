@@ -1841,61 +1841,6 @@
         }
 
         function copyRtspUrl() {
-    const url = document.getElementById('rtsp-url-link').textContent;
-    navigator.clipboard.writeText(url).then(() => {
-        showMessage('URL RTSP copiato negli appunti!', 'success');
-    }).catch(() => {
-        showMessage('Errore nel copia URL', 'error');
-    });
-    return false;
-}
-
-function loadVideoPreview() {
-    const previewImg = document.getElementById('video-preview');
-    const loadingSpinner = document.getElementById('preview-spinner');
-    
-    // Mostri spinner di caricamento
-    if (!loadingSpinner) {
-        const spinner = document.createElement('div');
-        spinner.id = 'preview-spinner';
-        spinner.style.cssText = `
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: none;
-            z-index: 10;
-        `;
-        spinner.innerHTML = '⏳ Caricamento...';
-        previewImg.parentElement.appendChild(spinner);
-    }
-    
-    const spinner = document.getElementById('preview-spinner');
-    spinner.style.display = 'block';
-    
-    // Fetch frame dal backend
-    fetch('/api/video/preview')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Errore HTTP: ${response.status}`);
-            }
-            return response.blob();
-        })
-        .then(blob => {
-            const url = URL.createObjectURL(blob);
-            previewImg.src = url;
-            previewImg.style.display = 'block';
-            spinner.style.display = 'none';
-            showMessage('Anteprima catturata con successo!', 'success');
-        })
-        .catch(error => {
-            spinner.style.display = 'none';
-            console.error('Errore caricamento preview:', error);
-            showMessage(`Errore nell'acquisire l'anteprima: ${error.message}`, 'error');
-        });
-}
-
-function copyRtspUrl() {
             const rtspLink = document.getElementById('rtsp-url-link');
             const text = rtspLink.textContent;
             
