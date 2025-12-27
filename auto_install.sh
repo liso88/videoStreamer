@@ -156,17 +156,7 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-sudo systemctl daemon-reload
-sudo systemctl enable stream-manager.service
-sudo systemctl enable mediamtx.service
-sudo systemctl enable wifi-fallback.service
-sudo systemctl start stream-manager.service
-sudo systemctl start mediamtx.service
-sudo systemctl start wifi-fallback.service
-echo "✓ Servizi configurati e avviati"
-echo ""
-
-# Crea il servizio WiFi Fallback
+# Crea il servizio WiFi Fallback (PRIMA di abilitarlo)
 echo "[8b/8] Configurazione WiFi Fallback Hotspot..."
 sudo tee /etc/systemd/system/wifi-fallback.service > /dev/null <<EOF
 [Unit]
@@ -186,6 +176,16 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 echo "✓ Servizio WiFi Fallback configurato"
+echo ""
+
+sudo systemctl daemon-reload
+sudo systemctl enable stream-manager.service
+sudo systemctl enable mediamtx.service
+sudo systemctl enable wifi-fallback.service
+sudo systemctl start stream-manager.service
+sudo systemctl start mediamtx.service
+sudo systemctl start wifi-fallback.service
+echo "✓ Servizi configurati e avviati"
 echo ""
 
 # Configurazione cloud-init
