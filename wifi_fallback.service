@@ -1,20 +1,12 @@
 [Unit]
-Description=WiFi Fallback to Hotspot
-After=network-online.target NetworkManager.service
-Wants=network-online.target
-# Non partire se già connessi
-ConditionPathExists=!/tmp/hotspot_active
+Description=WiFi Fallback Hotspot
+After=network.target
 
 [Service]
 Type=simple
-User=root
 ExecStart=/usr/local/bin/wifi_fallback.sh
-Restart=always
+Restart=on-failure
 RestartSec=10
-StandardOutput=journal
-StandardError=journal
-TimeoutStartSec=120
-KillMode=process
 
 [Install]
 WantedBy=multi-user.target
