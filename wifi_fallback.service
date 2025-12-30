@@ -1,12 +1,15 @@
 [Unit]
-Description=WiFi Fallback Hotspot
+Description=WiFi Fallback to Hotspot
 After=network.target
+Wants=network-online.target
 
 [Service]
-Type=simple
+Type=oneshot
+User=root
 ExecStart=/usr/local/bin/wifi_fallback.sh
-Restart=on-failure
-RestartSec=10
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

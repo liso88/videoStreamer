@@ -1,104 +1,108 @@
 #!/bin/bash
-# WiFi Fallback: Se non riesce a connettersi a internet, diventa hotspot
-# Versione corretta che non modifica file di sistema
+# WiFi Fallback: Se non riesce a connettersi, diventa hotspot
+# Questo script viene eseguito al boot tramite systemd
+
+set -e
 
 INTERFACE="wlan0"
 HOTSPOT_SSID="videoStreamer"
-HOTSPOT_PASSWORD="videostreamer"
 HOTSPOT_IP="192.168.50.1"
-WAIT_TIME=30
+TIMEOUT_SECONDS=30
 LOG_FILE="/var/log/wifi_fallback.log"
 
-# Funzione per logging
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILE
+echo "[$(date)] ===== WiFi Fallback Script Avviato =====" >> $LOG_FILE
+
+# Funzione per log
+log_msg() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> $LOG_FILE
+    echo "$1"
 }
 
-log "===== WiFi Fallback Avviato ====="
+# Aspetta che la rete sia disponibile
+log_msg "⏳ Attendo connessione WiFi per $TIMEOUT_SECONDS secondi..."
+sleep 5
 
-# Attendi che il sistema si stabilizzi
-log "Attendo $WAIT_TIME secondi per connessione WiFi..."
-sleep $WAIT_TIME
+# Controlla se connesso a internet
+check_internet() {
+    timeout 5 ping -c 1 8.8.8.8 > /dev/null 2>&1
+    return $?
+}
 
-# Verifica connessione internet
-log "Verifico connessione internet..."
-if ping -c 3 -W 5 8.8.8.8 &>/dev/null; then
-    log "✅ Internet raggiungibile - hotspot NON necessario"
+# Se connesso, esci
+if check_internet; then
+    log_msg "✅ Connesso a internet. WiFi Fallback disattivato."
     exit 0
 fi
 
-log "❌ Nessuna connessione internet - avvio hotspot"
+# Conta i tentativi
+for i in $(seq 1 $(($TIMEOUT_SECONDS / 5))); do
+    log_msg "🔍 Tentativo $i: Ricerca reti WiFi..."
+    
+    if check_internet; then
+        log_msg "✅ Internet disponibile al tentativo $i"
+        exit 0
+    fi
+    
+    sleep 5
+done
 
-# Ferma NetworkManager per evitare conflitti
-log "Fermo NetworkManager..."
-systemctl stop NetworkManager 2>/dev/null || true
-killall wpa_supplicant 2>/dev/null || true
-sleep 2
+# Se arriviamo qui, non c'è connessione: attiva hotspot
+log_msg "❌ Nessuna connessione internet disponibile. Attivazione hotspot..."
 
-# Configura interfaccia
-log "Configuro interfaccia $INTERFACE..."
-ip link set $INTERFACE down
-sleep 1
-ip link set $INTERFACE up
-ip addr flush dev $INTERFACE
-ip addr add $HOTSPOT_IP/24 dev $INTERFACE
-sleep 2
+# Verifica che hostapd e dnsmasq siano installati
+if ! command -v hostapd &> /dev/null; then
+    log_msg "❌ hostapd non è installato. Esegui auto_install.sh per installarlo."
+    exit 1
+fi
 
-# Crea configurazione hostapd in /tmp (NON modifica file di sistema!)
-log "Creo configurazione hostapd..."
-cat > /tmp/hostapd_hotspot.conf <<EOF
+if ! command -v dnsmasq &> /dev/null; then
+    log_msg "❌ dnsmasq non è installato. Esegui auto_install.sh per installarlo."
+    exit 1
+fi
+
+# Configura indirizzo IP statico per hotspot
+log_msg "🔧 Configurazione indirizzo IP $HOTSPOT_IP..."
+sudo ip addr add $HOTSPOT_IP/24 dev $INTERFACE 2>/dev/null || sudo ip addr replace $HOTSPOT_IP/24 dev $INTERFACE
+
+# Crea configurazione hostapd
+log_msg "📝 Creazione configurazione hostapd..."
+sudo tee /etc/hostapd/hostapd_fallback.conf > /dev/null <<EOF
 interface=$INTERFACE
 driver=nl80211
 ssid=$HOTSPOT_SSID
 hw_mode=g
-channel=7
-wmm_enabled=0
+channel=6
+wmm_enabled=1
 macaddr_acl=0
 auth_algs=1
 ignore_broadcast_ssid=0
-wpa=2
-wpa_passphrase=$HOTSPOT_PASSWORD
-wpa_key_mgmt=WPA-PSK
-wpa_pairwise=TKIP
-rsn_pairwise=CCMP
+wpa=0
+wpa_key_mgmt=NONE
 EOF
 
-# Crea configurazione dnsmasq in /tmp (NON modifica file di sistema!)
-log "Creo configurazione dnsmasq..."
-cat > /tmp/dnsmasq_hotspot.conf <<EOF
+# Crea configurazione dnsmasq
+log_msg "📝 Creazione configurazione dnsmasq..."
+sudo tee /etc/dnsmasq_fallback.conf > /dev/null <<EOF
 interface=$INTERFACE
 dhcp-range=192.168.50.50,192.168.50.150,255.255.255.0,24h
-domain=wlan
-address=/gw.wlan/$HOTSPOT_IP
+dhcp-option=option:router,$HOTSPOT_IP
+dhcp-option=option:dns-server,8.8.8.8,8.8.4.4
+address=/#/$HOTSPOT_IP
 EOF
 
-# Ferma dnsmasq di sistema
-systemctl stop dnsmasq 2>/dev/null || true
+# Avvia hostapd
+log_msg "🚀 Avvio hostapd..."
+sudo systemctl stop hostapd 2>/dev/null || true
+sudo hostapd -B /etc/hostapd/hostapd_fallback.conf
 
-# Avvia hostapd con config temporanea
-log "Avvio hostapd..."
-/usr/sbin/hostapd -B /tmp/hostapd_hotspot.conf
-sleep 3
+# Avvia dnsmasq
+log_msg "Avvio dnsmasq..."
+sudo systemctl stop dnsmasq 2>/dev/null || true
+sudo dnsmasq -C /etc/dnsmasq_fallback.conf
 
-# Avvia dnsmasq con config temporanea
-log "Avvio dnsmasq..."
-/usr/sbin/dnsmasq -C /tmp/dnsmasq_hotspot.conf
+log_msg "✅ Hotspot attivato!"
+log_msg "📡 SSID: $HOTSPOT_SSID"
+log_msg "🔐 Password: $HOTSPOT_PASSWORD"
+log_msg "🌐 Accedi a: http://$HOTSPOT_IP"
 
-log "✅ Hotspot attivo!"
-log "📡 SSID: $HOTSPOT_SSID"
-log "🔐 Password: $HOTSPOT_PASSWORD"
-log "🌐 IP: $HOTSPOT_IP"
-
-# Loop infinito per mantenere lo script attivo
-log "Loop di monitoraggio attivo..."
-while true; do
-    sleep 60
-    if ! pgrep hostapd > /dev/null; then
-        log "⚠️ hostapd morto, riavvio..."
-        /usr/sbin/hostapd -B /tmp/hostapd_hotspot.conf
-    fi
-    if ! pgrep dnsmasq > /dev/null; then
-        log "⚠️ dnsmasq morto, riavvio..."
-        /usr/sbin/dnsmasq -C /tmp/dnsmasq_hotspot.conf
-    fi
-done
+exit 0
