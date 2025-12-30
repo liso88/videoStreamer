@@ -1,7 +1,9 @@
 [Unit]
 Description=WiFi Fallback to Hotspot
-After=network.target
+After=network-online.target NetworkManager.service
 Wants=network-online.target
+# Non partire se già connessi
+ConditionPathExists=!/tmp/hotspot_active
 
 [Service]
 Type=oneshot
@@ -10,6 +12,8 @@ ExecStart=/usr/local/bin/wifi_fallback.sh
 RemainAfterExit=yes
 StandardOutput=journal
 StandardError=journal
+TimeoutStartSec=120
+# Aumenta il timeout perché lo script aspetta 45 secondi
 
 [Install]
 WantedBy=multi-user.target
