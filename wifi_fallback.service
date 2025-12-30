@@ -6,14 +6,15 @@ Wants=network-online.target
 ConditionPathExists=!/tmp/hotspot_active
 
 [Service]
-Type=oneshot
+Type=simple
 User=root
 ExecStart=/usr/local/bin/wifi_fallback.sh
-RemainAfterExit=yes
+Restart=always
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 TimeoutStartSec=120
-# Aumenta il timeout perché lo script aspetta 45 secondi
+KillMode=process
 
 [Install]
 WantedBy=multi-user.target

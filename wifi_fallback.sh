@@ -5,8 +5,9 @@
 set -e
 
 INTERFACE="wlan0"
-HOTSPOT_SSID="videoStreamer"
+HOTSPOT_SSID="VideoStreamer"
 HOTSPOT_IP="192.168.50.1"
+HOTSPOT_PASSWORD="videostreamer123"  # Password per l'hotspot
 TIMEOUT_SECONDS=45
 LOG_FILE="/var/log/wifi_fallback.log"
 LOCK_FILE="/tmp/wifi_fallback.lock"
@@ -135,7 +136,11 @@ wmm_enabled=1
 macaddr_acl=0
 auth_algs=1
 ignore_broadcast_ssid=0
-wpa=0
+wpa=2
+wpa_passphrase=$HOTSPOT_PASSWORD
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=CCMP
+rsn_pairwise=CCMP
 EOF
 
 # Configura dnsmasq
@@ -198,7 +203,7 @@ log_msg "✅ dnsmasq avviato"
 echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || true
 
 log_msg ""
-log_msg "============================================"
+log_msg "=� Password: $HOTSPOT_PASSWORD====="
 log_msg "✅ HOTSPOT ATTIVO!"
 log_msg "============================================"
 log_msg "📡 SSID: $HOTSPOT_SSID"
@@ -220,4 +225,36 @@ IP=$HOTSPOT_IP
 STARTED=$(date)
 EOF
 
-exit 0
+# ==========================================
+# LOOP DI MONITORAGGIO HOTSPOT
+# ==========================================
+# Mantiene hostapd e dnsmasq attivi
+# Verifica ogni 30 secondi che siano ancora in esecuzione
+
+log_msg "🔄 Avvio loop di monitoraggio hotspot..."
+
+while true; do
+    sleep 30
+    
+    # Verifica hostapd
+    if ! pgrep -f "hostapd.*hostapd_fallback" > /dev/null; then
+        log_msg "⚠️  hostapd è caduto! Riavvio..."
+        hostapd -B /tmp/hostapd_fallback.conf -P /tmp/hostapd_fallback.pid >> $LOG_FILE 2>&1 &
+        sleep 2
+    fi
+    
+    # Verifica dnsmasq
+    if ! pgrep -f "dnsmasq.*dnsmasq_fallback" > /dev/null; then
+        log_msg "⚠️  dnsmasq è caduto! Riavvio..."
+        dnsmasq -C /tmp/dnsmasq_fallback.conf --pid-file=/tmp/dnsmasq_fallback.pid >> $LOG_FILE 2>&1
+        sleep 2
+    fi
+    
+    # Verifica che l'interfaccia sia ancora su
+    if ! ip link show $INTERFACE 2>/dev/null | grep -q "UP"; then
+        log_msg "⚠️  Interfaccia $INTERFACE down! Reboot..."
+        ip link set $INTERFACE up
+        sleep 2
+    fi
+    
+done
