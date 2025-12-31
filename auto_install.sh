@@ -16,6 +16,14 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
+# Verifica RAM disponibile (warning per dispositivi con poca RAM)
+TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
+if [ "$TOTAL_RAM" -lt 512 ]; then
+    echo "⚠️  Rilevata RAM limitata (${TOTAL_RAM}MB). La compilazione potrebbe richiedere tempo."
+    echo "⚠️  Consigliato: aumentare lo swap temporaneamente."
+    echo ""
+fi
+
 # Step 1
 echo "[1/8] Aggiornamento sistema..."
 sudo apt update && sudo apt upgrade -y
@@ -81,11 +89,13 @@ echo ""
 
 # Step 4
 echo "[4/8] Compilazione mjpg-streamer..."
+echo "ℹ️  La compilazione potrebbe richiedere diversi minuti su dispositivi con risorse limitate..."
 cd ~
 [ -d "mjpg-streamer" ] && rm -rf mjpg-streamer
-git clone https://github.com/jacksonliam/mjpg-streamer.git
+git clone --depth 1 https://github.com/jacksonliam/mjpg-streamer.git
 cd mjpg-streamer/mjpg-streamer-experimental
-make
+# Usa un solo job per evitare problemi di memoria
+make -j1
 sudo make install
 echo "✓ mjpg-streamer compilato"
 echo ""
@@ -94,7 +104,12 @@ echo ""
 echo "[5/8] Installazione MediaMTX..."
 cd ~
 ARCH=$(uname -m)
-[ "$ARCH" = "aarch64" ] && MEDIAMTX_ARCH="arm64v8" || MEDIAMTX_ARCH="armv7"
+if [ "$ARCH" = "aarch64" ]; then
+    MEDIAMTX_ARCH="arm64v8"
+else
+    MEDIAMTX_ARCH="armv7"
+fi
+echo "ℹ️  Architettura rilevata: $ARCH -> MediaMTX: $MEDIAMTX_ARCH"
 
 wget -q https://github.com/bluenviron/mediamtx/releases/download/v1.5.0/mediamtx_v1.5.0_linux_${MEDIAMTX_ARCH}.tar.gz
 tar -xzf mediamtx_v1.5.0_linux_${MEDIAMTX_ARCH}.tar.gz
@@ -157,7 +172,31 @@ if [ -f wifi_fallback.sh ]; then
     echo "✓ wifi_fallback.sh copiato in /usr/local/bin/"
 fi
 
-echo "✓ File applicazione verificati"
+# Crea file di log per wifi_fallback
+sudo touch /var/log/wifi_fallback.log
+sudo chmod 644 /var/log/wifi_fallback.log
+
+# Configura NetworkManager per WiFi Fallback
+if command -v nmcli &> /dev/null; then
+    sudo mkdir -p /etc/NetworkManager/conf.d/
+    sudo tee /etc/NetworkManager/conf.d/hotspot-fallback.conf > /dev/null <<'NMEOF'
+[main]
+plugins=keyfile
+
+[keyfile]
+unmanaged-devices=
+NMEOF
+    
+    # Riavvia NetworkManager per applicare la configurazione
+    if systemctl is-active --quiet NetworkManager; then
+        sudo systemctl restart NetworkManager
+        echo "✓ NetworkManager configurato"
+    fi
+else
+    echo "ℹ️  NetworkManager non presente (opzionale)"
+fi
+
+echo "✓ File applicazione verificati e WiFi Fallback configurato"
 echo ""
 
 # Step 8
@@ -201,13 +240,14 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-# Crea il servizio WiFi Fallback (PRIMA di abilitarlo)
+# Crea il servizio WiFi Fallback
 echo "[8b/8] Configurazione WiFi Fallback Hotspot..."
 sudo tee /etc/systemd/system/wifi-fallback.service > /dev/null <<EOF
 [Unit]
 Description=WiFi Fallback to Hotspot
-After=network.target
+After=network-online.target NetworkManager.service
 Wants=network-online.target
+After=multi-user.target
 
 [Service]
 Type=oneshot
@@ -216,6 +256,8 @@ ExecStart=/usr/local/bin/wifi_fallback.sh
 RemainAfterExit=yes
 StandardOutput=journal
 StandardError=journal
+TimeoutStartSec=90
+Restart=no
 
 [Install]
 WantedBy=multi-user.target
@@ -227,10 +269,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable stream-manager.service
 sudo systemctl enable mediamtx.service
 sudo systemctl enable wifi-fallback.service
-sudo systemctl start stream-manager.service
-sudo systemctl start mediamtx.service
-sudo systemctl start wifi-fallback.service
-echo "✓ Servizi configurati e avviati"
+echo "✓ Servizi abilitati all'avvio"
 echo ""
 
 # Configurazione cloud-init
@@ -264,10 +303,11 @@ sudo chmod 0440 "$SUDOERS_FILE"
 echo "✓ Permessi sudo configurati"
 echo ""
 
-# Avvia servizi
+# Avvio servizi
 echo "Avvio servizi..."
 sudo systemctl start stream-manager.service || true
 sudo systemctl start mediamtx.service || true
+sudo systemctl start wifi-fallback.service || true
 echo "✓ Servizi avviati"
 echo ""
 
@@ -283,7 +323,7 @@ echo "   Username: admin"
 echo "   Password: admin"
 echo ""
 echo "📱 Accedi all'interfaccia web:"
-echo "   http://$IP:5000"
+echo "   http://$IP"
 echo ""
 echo "🎥 Stream MJPG (quando avviato):"
 echo "   http://$IP:8080"
@@ -292,13 +332,18 @@ echo "📡 Stream RTSP (quando avviato):"
 echo "   rtsp://$IP:8554/video"
 echo ""
 echo "🔑 Per cambiare password:"
-echo "   cd ~/stream_manager"
+echo "   cd ~/videoStreamer"
 echo "   python3 change_password.py"
 echo ""
 echo "🔧 Comandi utili:"
 echo "   sudo systemctl status stream-manager"
 echo "   sudo systemctl status mediamtx"
+echo "   sudo systemctl status wifi-fallback"
 echo "   sudo journalctl -u stream-manager -f"
+echo "   sudo journalctl -u wifi-fallback -f"
+echo ""
+echo "📶 WiFi Fallback Hotspot:"
+echo "   Se non connesso a WiFi, hotspot attivo: videoStreamer (192.168.50.1)"
 echo ""
 echo "⚠️  IMPORTANTE: Cambia la password di default dopo il primo accesso!"
 echo ""
