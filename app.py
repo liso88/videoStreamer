@@ -13,6 +13,7 @@ import psutil
 import hashlib
 import secrets
 import re
+import time
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -1339,9 +1340,23 @@ def api_network_dhcp():
 def api_wifi_scan():
     """Scansiona le reti WiFi disponibili"""
     try:
-        # Usa nmcli (NetworkManager)
+        # Verifica se siamo in modalità hotspot
+        is_hotspot_active = os.path.exists('/tmp/hotspot_active')
+        hotspot_was_active = is_hotspot_active
+        
+        if is_hotspot_active:
+            print(f"[WIFI] 📡 Hotspot attivo - disattivazione temporanea per scansione...")
+            
+            # Disattiva temporaneamente l'hotspot per permettere la scansione
+            subprocess.run(['sudo', 'nmcli', 'connection', 'down', 'Hotspot-Fallback'],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            time.sleep(2)
+            print(f"[WIFI] ✓ Hotspot disattivato temporaneamente")
+        
+        # Usa nmcli (NetworkManager) per scansione
+        print(f"[WIFI] 🔍 Avvio scansione reti WiFi...")
         result = subprocess.run(['nmcli', 'dev', 'wifi', 'list', '--rescan', 'yes'], 
-                              capture_output=True, text=True, timeout=15)
+                              capture_output=True, text=True, timeout=20)
         
         networks = []
         
@@ -1354,10 +1369,6 @@ def api_wifi_scan():
                     # Parsing manuale basato su posizioni fisse
                     parts = line.split()
                     if len(parts) >= 6:
-                        # IN-USE è la prima colonna (spesso vuota o "*")
-                        # BSSID è la seconda
-                        # SSID dovrebbe essere dopo BSSID
-                        
                         # Approccio: estrai BSSID (formato XX:XX:XX:XX:XX:XX) e signal
                         import re
                         
@@ -1380,8 +1391,8 @@ def api_wifi_scan():
                                 if len(rest_after_mode) >= 4:
                                     signal = rest_after_mode[3]  # Signal è il 4° elemento dopo Infra
                                     
-                                    # Filtra SSID vuoti
-                                    if ssid and ssid != '*':
+                                    # Filtra SSID vuoti e il nostro hotspot
+                                    if ssid and ssid != '*' and ssid != 'videoStreamer':
                                         networks.append({
                                             'ssid': ssid,
                                             'bssid': bssid,
@@ -1405,12 +1416,35 @@ def api_wifi_scan():
                     unique_networks[ssid] = net
         
         print(f"[WIFI] ✅ Trovate {len(unique_networks)} reti WiFi")
+        
+        # Riattiva l'hotspot se era attivo e non ci siamo connessi a nulla
+        message = None
+        if hotspot_was_active:
+            if len(unique_networks) == 0:
+                # Nessuna rete trovata, riattiva hotspot
+                print(f"[WIFI] ⚠️  Nessuna rete trovata, riattivazione hotspot...")
+                subprocess.run(['sudo', 'nmcli', 'connection', 'up', 'Hotspot-Fallback'],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                message = "⚠️  Nessuna rete trovata. Hotspot riattivato."
+            else:
+                # Reti trovate, riattiva hotspot temporaneamente
+                print(f"[WIFI] 🔄 Riattivazione hotspot (in attesa di connessione)...")
+                subprocess.run(['sudo', 'nmcli', 'connection', 'up', 'Hotspot-Fallback'],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                message = "ℹ️  Seleziona una rete per connetterti. L'hotspot verrà disattivato."
+        
         return jsonify({
             'success': True,
-            'networks': list(unique_networks.values())
+            'networks': list(unique_networks.values()),
+            'is_hotspot': hotspot_was_active,
+            'message': message
         })
     except Exception as e:
         print(f"[WIFI] ❌ Errore scansione: {e}")
+        # In caso di errore, prova a riattivare l'hotspot se era attivo
+        if os.path.exists('/tmp/hotspot_active'):
+            subprocess.run(['sudo', 'nmcli', 'connection', 'up', 'Hotspot-Fallback'],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return jsonify({'success': False, 'error': str(e)})
 
 
@@ -1481,6 +1515,16 @@ def api_wifi_connect():
             print(f"[WIFI] ⚠️  Avviso attivazione: {error_msg}")
         else:
             print(f"[WIFI] ✅ Connessione attivata: {ssid}")
+        
+        # Disattiva hotspot se era attivo
+        if os.path.exists('/tmp/hotspot_active'):
+            print(f"[WIFI] 📡 Disattivazione hotspot...")
+            subprocess.run(['sudo', 'nmcli', 'connection', 'down', 'Hotspot-Fallback'],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                os.remove('/tmp/hotspot_active')
+            except:
+                pass
         
         # Salva la configurazione di rete in un file per persistenza
         try:
@@ -1567,6 +1611,38 @@ def api_wifi_forget_all():
         })
     except Exception as e:
         print(f"[WIFI] ❌ Eccezione: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/wifi/disable-hotspot', methods=['POST'])
+@login_required
+def api_wifi_disable_hotspot():
+    """Disattiva manualmente l'hotspot WiFi"""
+    try:
+        print(f"[WIFI] 🛑 Disattivazione hotspot manuale...")
+        
+        # Verifica se l'hotspot è attivo
+        if not os.path.exists('/tmp/hotspot_active'):
+            return jsonify({
+                'success': False,
+                'error': 'Hotspot non attivo'
+            })
+        
+        # Disattiva l'hotspot usando NetworkManager
+        subprocess.run(['sudo', 'nmcli', 'connection', 'down', 'Hotspot-Fallback'],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Rimuovi marker
+        subprocess.run(['sudo', 'rm', '-f', '/tmp/hotspot_active'],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        print(f"[WIFI] ✅ Hotspot disattivato")
+        return jsonify({
+            'success': True,
+            'message': 'Hotspot disattivato. NetworkManager cercherà connessioni WiFi salvate.'
+        })
+    except Exception as e:
+        print(f"[WIFI] ❌ Errore: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 

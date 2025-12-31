@@ -1,12 +1,14 @@
 #!/bin/bash
-# WiFi Fallback: Se non riesce a connettersi, diventa hotspot
-# Versione corretta completa - Sostituisce il file originale
+# WiFi Fallback: Se non riesce a connettersi, attiva hotspot con NetworkManager
+# Versione NetworkManager nativa - Semplificata e robusta
 
-set -e
+# NON usare set -e perché alcuni comandi possono fallire normalmente
+# set -e
 
 INTERFACE="wlan0"
 HOTSPOT_SSID="videoStreamer"
 HOTSPOT_IP="192.168.50.1"
+HOTSPOT_CONNECTION="Hotspot-Fallback"
 WAIT_TIME=30
 LOG_FILE="/var/log/wifi_fallback.log"
 
@@ -19,11 +21,19 @@ log_msg() {
     echo "$msg" | tee -a $LOG_FILE
 }
 
-log_msg "===== WiFi Fallback Script Avviato ====="
+log_msg "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_msg "  WiFi Fallback Script Avviato"
+log_msg "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Verifica che lo script sia eseguito come root
 if [ "$EUID" -ne 0 ]; then 
     log_msg "❌ Questo script deve essere eseguito come root"
+    exit 1
+fi
+
+# Verifica NetworkManager
+if ! command -v nmcli &> /dev/null; then
+    log_msg "❌ NetworkManager non trovato. Installalo con: sudo apt install network-manager"
     exit 1
 fi
 
@@ -35,21 +45,15 @@ if ! ip link show $INTERFACE &> /dev/null; then
 fi
 
 log_msg "✅ Interfaccia $INTERFACE trovata"
+log_msg "✅ NetworkManager disponibile"
 
 # Funzione per verificare se ci sono connessioni WiFi attive
-has_wifi_connections() {
-    # Verifica se wlan0 ha un IP e una connessione attiva
-    if ip addr show $INTERFACE | grep -q "inet "; then
+has_wifi_connection() {
+    # Verifica con NetworkManager se c'è una connessione WiFi attiva (escluso hotspot)
+    local active=$(nmcli -t -f NAME,TYPE,STATE connection show --active 2>/dev/null | grep "802-11-wireless:activated" | grep -v "$HOTSPOT_CONNECTION" || true)
+    if [ -n "$active" ]; then
         return 0
     fi
-    
-    # Verifica con NetworkManager
-    if command -v nmcli &> /dev/null; then
-        if nmcli -t -f TYPE,STATE connection show --active 2>/dev/null | grep -q "802-11-wireless:activated"; then
-            return 0
-        fi
-    fi
-    
     return 1
 }
 
@@ -68,17 +72,15 @@ check_internet() {
     return 1
 }
 
-# Aspetta che NetworkManager si avvii (se presente)
-if command -v nmcli &> /dev/null; then
-    log_msg "⏳ Attesa avvio NetworkManager..."
-    for i in {1..15}; do
-        if systemctl is-active --quiet NetworkManager; then
-            log_msg "✅ NetworkManager attivo"
-            break
-        fi
-        sleep 1
-    done
-fi
+# Attendi avvio NetworkManager
+log_msg "⏳ Attesa avvio NetworkManager..."
+for i in {1..15}; do
+    if systemctl is-active --quiet NetworkManager; then
+        log_msg "✅ NetworkManager attivo"
+        break
+    fi
+    sleep 1
+done
 
 # Attendi connessione WiFi
 log_msg "⏳ Attendo connessione WiFi per $WAIT_TIME secondi..."
@@ -86,7 +88,7 @@ log_msg "⏳ Attendo connessione WiFi per $WAIT_TIME secondi..."
 connected=false
 for i in $(seq 1 $WAIT_TIME); do
     # Verifica se connesso via WiFi
-    if has_wifi_connections; then
+    if has_wifi_connection &> /dev/null; then
         log_msg "✅ Rilevata connessione WiFi attiva"
         
         # Verifica anche internet
@@ -95,10 +97,10 @@ for i in $(seq 1 $WAIT_TIME); do
             connected=true
             break
         else
-            log_msg "⚠️  WiFi connesso ma no internet (tentativo $i/$WAIT_TIME)"
+            log_msg "⚠️  WiFi connesso ma senza internet (tentativo $i/$WAIT_TIME)"
         fi
     else
-        if [ $((i % 5)) -eq 0 ]; then
+        if [ $((i % 10)) -eq 0 ]; then
             log_msg "⏳ Nessuna connessione WiFi (${i}s/${WAIT_TIME}s)"
         fi
     fi
@@ -108,173 +110,101 @@ done
 
 # Se connesso, esci
 if [ "$connected" = true ]; then
-    log_msg "✅ Connessione stabile. Script terminato."
+    log_msg "✅ Sistema connesso a WiFi. Script terminato."
+    # Rimuovi marker se presente
+    rm -f /tmp/hotspot_active
     exit 0
 fi
 
 # Se arriviamo qui, non c'è connessione: attiva hotspot
-log_msg "❌ Timeout: Nessuna connessione WiFi disponibile"
-log_msg "🚀 Attivazione modalità Hotspot..."
+log_msg "❌ Nessuna connessione WiFi disponibile dopo ${WAIT_TIME}s"
+log_msg "🚀 Attivazione modalità Hotspot con NetworkManager..."
 
-# Verifica dipendenze
-if ! command -v hostapd &> /dev/null; then
-    log_msg "❌ ERRORE: hostapd non installato"
-    log_msg "   Installa con: sudo apt install hostapd"
-    exit 1
+# Verifica se il profilo hotspot esiste già
+if nmcli connection show "$HOTSPOT_CONNECTION" &> /dev/null; then
+    log_msg "ℹ️  Profilo hotspot esistente trovato"
+    
+    # Verifica se è già attivo
+    if nmcli -t -f NAME,STATE connection show --active | grep -q "^${HOTSPOT_CONNECTION}:activated$"; then
+        log_msg "✅ Hotspot già attivo"
+        touch /tmp/hotspot_active
+        exit 0
+    fi
+    
+    log_msg "🔄 Attivazione profilo hotspot esistente..."
+else
+    log_msg "📝 Creazione nuovo profilo hotspot..."
+    
+    # Crea profilo hotspot con NetworkManager
+    if nmcli connection add \
+        type wifi \
+        ifname $INTERFACE \
+        con-name "$HOTSPOT_CONNECTION" \
+        autoconnect no \
+        ssid "$HOTSPOT_SSID" \
+        mode ap \
+        802-11-wireless.band bg \
+        ipv4.method shared \
+        ipv4.addresses $HOTSPOT_IP/24 \
+        >> $LOG_FILE 2>&1; then
+        log_msg "✅ Profilo hotspot creato con successo"
+    else
+        log_msg "❌ Errore creazione profilo hotspot"
+        tail -n 10 $LOG_FILE
+        exit 1
+    fi
 fi
 
-if ! command -v dnsmasq &> /dev/null; then
-    log_msg "❌ ERRORE: dnsmasq non installato"
-    log_msg "   Installa con: sudo apt install dnsmasq"
-    exit 1
-fi
-
-log_msg "✅ Dipendenze verificate (hostapd, dnsmasq)"
-
-# Ferma eventuali istanze precedenti
-log_msg "🛑 Pulizia processi precedenti..."
-killall hostapd 2>/dev/null || true
-killall dnsmasq 2>/dev/null || true
-sleep 2
-
-# Disabilita gestione NetworkManager su wlan0 (se presente)
-if command -v nmcli &> /dev/null; then
-    log_msg "🔧 Disattivazione gestione NetworkManager su $INTERFACE..."
-    nmcli device set $INTERFACE managed no 2>/dev/null || true
+# Disattiva eventuali connessioni WiFi attive su wlan0
+log_msg "🔧 Disattivazione connessioni WiFi esistenti su $INTERFACE..."
+active_connections=$(nmcli -t -f NAME,DEVICE connection show --active | grep "$INTERFACE" | cut -d: -f1)
+if [ -n "$active_connections" ]; then
+    echo "$active_connections" | while read conn; do
+        if [ "$conn" != "$HOTSPOT_CONNECTION" ]; then
+            log_msg "   Disattivazione: $conn"
+            nmcli connection down "$conn" >> $LOG_FILE 2>&1 || true
+        fi
+    done
     sleep 2
 fi
 
-# Porta su l'interfaccia
-log_msg "🔧 Attivazione interfaccia $INTERFACE..."
-ip link set $INTERFACE down 2>/dev/null || true
-sleep 1
-ip link set $INTERFACE up 2>/dev/null || true
-sleep 2
-
-# Rimuovi eventuali IP precedenti
-log_msg "🔧 Pulizia configurazione IP precedente..."
-ip addr flush dev $INTERFACE 2>/dev/null || true
-
-# Configura indirizzo IP statico per hotspot
-log_msg "🔧 Configurazione indirizzo IP $HOTSPOT_IP/24..."
-if ip addr add ${HOTSPOT_IP}/24 dev $INTERFACE 2>&1 | tee -a $LOG_FILE; then
-    log_msg "✅ Indirizzo IP configurato"
-else
-    log_msg "⚠️  Indirizzo IP già presente o errore"
-fi
-
-# Verifica configurazione IP
-ip addr show $INTERFACE | grep inet | tee -a $LOG_FILE
-
-# Crea directory per configurazioni
-mkdir -p /etc/hostapd 2>/dev/null || true
-
-# Crea configurazione hostapd
-log_msg "📝 Creazione configurazione hostapd..."
-cat > /etc/hostapd/hostapd_fallback.conf <<EOF
-interface=$INTERFACE
-driver=nl80211
-ssid=$HOTSPOT_SSID
-hw_mode=g
-channel=6
-wmm_enabled=1
-macaddr_acl=0
-auth_algs=1
-ignore_broadcast_ssid=0
-# Rete aperta (nessuna password)
-EOF
-
-if [ -f /etc/hostapd/hostapd_fallback.conf ]; then
-    log_msg "✅ File hostapd_fallback.conf creato"
-    cat /etc/hostapd/hostapd_fallback.conf | tee -a $LOG_FILE
-else
-    log_msg "❌ Errore creazione hostapd_fallback.conf"
-    exit 1
-fi
-
-# Crea configurazione dnsmasq
-log_msg "📝 Creazione configurazione dnsmasq..."
-cat > /etc/dnsmasq_fallback.conf <<EOF
-interface=$INTERFACE
-bind-interfaces
-dhcp-range=192.168.50.50,192.168.50.150,255.255.255.0,24h
-dhcp-option=option:router,$HOTSPOT_IP
-dhcp-option=option:dns-server,$HOTSPOT_IP,8.8.8.8
-address=/#/$HOTSPOT_IP
-no-hosts
-log-queries
-log-dhcp
-EOF
-
-if [ -f /etc/dnsmasq_fallback.conf ]; then
-    log_msg "✅ File dnsmasq_fallback.conf creato"
-    cat /etc/dnsmasq_fallback.conf | tee -a $LOG_FILE
-else
-    log_msg "❌ Errore creazione dnsmasq_fallback.conf"
-    exit 1
-fi
-
-# Avvia hostapd
-log_msg "🚀 Avvio hostapd..."
-log_msg "   Comando: hostapd -B /etc/hostapd/hostapd_fallback.conf"
-
-if hostapd -B /etc/hostapd/hostapd_fallback.conf >> $LOG_FILE 2>&1; then
-    log_msg "✅ hostapd avviato con successo"
+# Attiva l'hotspot
+log_msg "🚀 Attivazione hotspot: $HOTSPOT_SSID..."
+if nmcli connection up "$HOTSPOT_CONNECTION" >> $LOG_FILE 2>&1; then
+    log_msg "✅ Hotspot attivato con successo"
     sleep 3
     
-    # Verifica che il processo sia attivo
-    if pgrep -x hostapd > /dev/null; then
-        log_msg "✅ Processo hostapd in esecuzione (PID: $(pgrep -x hostapd))"
+    # IMPORTANTE: Disabilita power management per evitare che la rete sparisca
+    log_msg "🔧 Disabilitazione power management su $INTERFACE..."
+    if iw dev $INTERFACE set power_save off >> $LOG_FILE 2>&1; then
+        log_msg "✅ Power management disabilitato (metodo iw)"
     else
-        log_msg "❌ hostapd non è in esecuzione!"
-        log_msg "   Log hostapd:"
-        tail -n 20 $LOG_FILE
-        exit 1
+        log_msg "⚠️  Comando iw non riuscito, provo con iwconfig..."
+        if iwconfig $INTERFACE power off >> $LOG_FILE 2>&1; then
+            log_msg "✅ Power management disabilitato (metodo iwconfig)"
+        else
+            log_msg "⚠️  Impossibile disabilitare power management"
+        fi
+    fi
+    
+    # Verifica stato power management
+    if command -v iw &> /dev/null; then
+        pm_status=$(iw dev $INTERFACE get power_save 2>/dev/null || echo "N/A")
+        log_msg "ℹ️  Power save status: $pm_status"
+    fi
+    
+    # Verifica che sia effettivamente attivo
+    if nmcli -t -f NAME,STATE connection show --active | grep -q "^${HOTSPOT_CONNECTION}:activated$"; then
+        log_msg "✅ Hotspot verificato e funzionante"
+    else
+        log_msg "⚠️  Hotspot attivato ma verifica fallita"
     fi
 else
-    log_msg "❌ Errore avvio hostapd"
+    log_msg "❌ Errore attivazione hotspot"
     log_msg "   Log degli ultimi errori:"
     tail -n 20 $LOG_FILE
-    
-    # Ripristina NetworkManager
-    if command -v nmcli &> /dev/null; then
-        nmcli device set $INTERFACE managed yes 2>/dev/null || true
-    fi
     exit 1
 fi
-
-# Avvia dnsmasq
-log_msg "🚀 Avvio dnsmasq..."
-log_msg "   Comando: dnsmasq -C /etc/dnsmasq_fallback.conf"
-
-if dnsmasq -C /etc/dnsmasq_fallback.conf >> $LOG_FILE 2>&1; then
-    log_msg "✅ dnsmasq avviato con successo"
-    sleep 2
-    
-    # Verifica che il processo sia attivo
-    if pgrep -x dnsmasq > /dev/null; then
-        log_msg "✅ Processo dnsmasq in esecuzione (PID: $(pgrep -x dnsmasq))"
-    else
-        log_msg "❌ dnsmasq non è in esecuzione!"
-        killall hostapd 2>/dev/null || true
-        exit 1
-    fi
-else
-    log_msg "❌ Errore avvio dnsmasq"
-    log_msg "   Log degli ultimi errori:"
-    tail -n 20 $LOG_FILE
-    
-    # Ferma hostapd e ripristina
-    killall hostapd 2>/dev/null || true
-    if command -v nmcli &> /dev/null; then
-        nmcli device set $INTERFACE managed yes 2>/dev/null || true
-    fi
-    exit 1
-fi
-
-# Abilita IP forwarding (opzionale, per condivisione internet via eth0)
-log_msg "🔧 Abilitazione IP forwarding..."
-echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null || true
 
 # Crea file marker per indicare che hotspot è attivo
 touch /tmp/hotspot_active
@@ -283,7 +213,7 @@ log_msg "✅ Marker hotspot creato: /tmp/hotspot_active"
 # Mostra riepilogo finale
 log_msg ""
 log_msg "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-log_msg "✅ HOTSPOT WiFi ATTIVO E FUNZIONANTE!"
+log_msg "✅ HOTSPOT WiFi ATTIVO!"
 log_msg "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 log_msg "📡 SSID:     $HOTSPOT_SSID"
 log_msg "🔓 Password: NESSUNA (rete aperta)"
@@ -291,10 +221,16 @@ log_msg "🌐 IP:       $HOTSPOT_IP"
 log_msg "🌐 URL:      http://$HOTSPOT_IP"
 log_msg "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 log_msg ""
-log_msg "ℹ️  Per disattivare l'hotspot:"
-log_msg "   sudo killall hostapd dnsmasq"
-log_msg "   sudo nmcli device set wlan0 managed yes"
+log_msg "ℹ️  Puoi ora connetterti alla rete '$HOTSPOT_SSID'"
+log_msg "ℹ️  Accedi all'interfaccia web su: http://$HOTSPOT_IP"
+log_msg "ℹ️  Usa l'interfaccia per configurare la connessione WiFi"
+log_msg ""
+log_msg "ℹ️  Per disattivare l'hotspot manualmente:"
+log_msg "   sudo nmcli connection down $HOTSPOT_CONNECTION"
 log_msg "   sudo rm /tmp/hotspot_active"
+log_msg ""
+log_msg "⚙️  Per eliminare il profilo hotspot:"
+log_msg "   sudo nmcli connection delete $HOTSPOT_CONNECTION"
 log_msg ""
 log_msg "Script completato con successo"
 

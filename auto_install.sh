@@ -16,13 +16,6 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-# Verifica RAM disponibile (warning per dispositivi con poca RAM)
-TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
-if [ "$TOTAL_RAM" -lt 512 ]; then
-    echo "⚠️  Rilevata RAM limitata (${TOTAL_RAM}MB). La compilazione potrebbe richiedere tempo."
-    echo "⚠️  Consigliato: aumentare lo swap temporaneamente."
-    echo ""
-fi
 
 # Step 1
 echo "[1/8] Aggiornamento sistema..."
@@ -32,8 +25,13 @@ echo ""
 
 # Step 2
 echo "[2/8] Installazione dipendenze base..."
-sudo apt install -y cmake libjpeg-dev gcc g++ git python3-pip python3-flask ffmpeg v4l-utils nginx hostapd dnsmasq
+sudo apt install -y cmake libjpeg-dev gcc g++ git python3-pip python3-flask ffmpeg v4l-utils nginx network-manager iw wireless-tools
 echo "✓ Dipendenze installate"
+
+# Abilita e avvia NetworkManager (necessario per hotspot)
+sudo systemctl enable NetworkManager
+sudo systemctl start NetworkManager
+echo "✓ NetworkManager abilitato e avviato"
 echo ""
 
 # Step 2b - Configurazione Nginx come reverse proxy
@@ -187,13 +185,19 @@ plugins=keyfile
 unmanaged-devices=
 NMEOF
     
+    # Disabilita power management WiFi per evitare che l'hotspot sparisca
+    sudo tee /etc/NetworkManager/conf.d/wifi-powersave.conf > /dev/null <<'PWEOF'
+[connection]
+wifi.powersave = 2
+PWEOF
+    echo "✓ Power save WiFi disabilitato"
+    
     # Riavvia NetworkManager per applicare la configurazione
-    if systemctl is-active --quiet NetworkManager; then
-        sudo systemctl restart NetworkManager
-        echo "✓ NetworkManager configurato"
-    fi
+    sudo systemctl restart NetworkManager
+    echo "✓ NetworkManager configurato"
 else
-    echo "ℹ️  NetworkManager non presente (opzionale)"
+    echo "⚠️  NetworkManager non trovato! L'hotspot WiFi non funzionerà."
+    echo "   Installa con: sudo apt install network-manager"
 fi
 
 echo "✓ File applicazione verificati e WiFi Fallback configurato"
@@ -285,8 +289,8 @@ echo ""
 # Permessi sudo
 echo "Configurazione permessi sudo..."
 SUDOERS_FILE="/etc/sudoers.d/stream-manager"
-sudo tee "$SUDOERS_FILE" > /dev/null <<'EOF'
-# Permessi per Stream Manager
+sudo tee "$SUDOERS_FILE" > /dev/null <<EOF
+# Permessi per Stream Manager - utente: $USER
 $USER ALL=(ALL) NOPASSWD: /bin/systemctl restart stream-manager
 $USER ALL=(ALL) NOPASSWD: /bin/systemctl restart mediamtx
 $USER ALL=(ALL) NOPASSWD: /bin/systemctl stop mediamtx
@@ -298,6 +302,11 @@ $USER ALL=(ALL) NOPASSWD: /usr/bin/hostname
 $USER ALL=(ALL) NOPASSWD: /bin/systemctl restart systemd-hostnamed
 $USER ALL=(ALL) NOPASSWD: /bin/netplan apply
 $USER ALL=(ALL) NOPASSWD: /usr/sbin/netplan
+$USER ALL=(ALL) NOPASSWD: /usr/bin/nmcli
+$USER ALL=(ALL) NOPASSWD: /usr/bin/killall
+$USER ALL=(ALL) NOPASSWD: /bin/rm -f /tmp/hotspot_active
+$USER ALL=(ALL) NOPASSWD: /sbin/shutdown
+$USER ALL=(ALL) NOPASSWD: /sbin/reboot
 EOF
 sudo chmod 0440 "$SUDOERS_FILE"
 echo "✓ Permessi sudo configurati"
