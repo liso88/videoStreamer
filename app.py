@@ -429,8 +429,8 @@ def start_rtsp_stream(config):
     try:
         process = subprocess.Popen(
             cmd, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL
         )
         
         # Salva il PID globale per stop successivo
@@ -441,11 +441,10 @@ def start_rtsp_stream(config):
         time.sleep(2)
         
         if process.poll() is not None:
-            stdout, stderr = process.communicate()
-            error_msg = stderr.decode() if stderr else "Processo terminato immediatamente"
-            print(f"[RTSP] ❌ Errore FFmpeg: {error_msg}")
+            # Processo terminato subito, c'è un errore
+            print(f"[RTSP] ❌ Errore FFmpeg: Processo terminato immediatamente")
             rtsp_ffmpeg_process = None
-            raise Exception(f"FFmpeg non si avvia: {error_msg}")
+            raise Exception("FFmpeg non si avvia")
         
         print(f"[RTSP] ✅ FFmpeg avviato con successo (PID: {process.pid})")
         return True
@@ -1385,19 +1384,22 @@ def api_wifi_scan():
                             mode_pos = rest.find('Infra')
                             if mode_pos > 0:
                                 ssid = rest[:mode_pos].strip()
-                                rest_after_mode = rest[mode_pos:].split()
+                                rest_after_mode = rest[mode_pos:]
                                 
-                                # Formato dopo Infra: CHAN RATE SIGNAL ...
-                                if len(rest_after_mode) >= 4:
-                                    signal = rest_after_mode[3]  # Signal è il 4° elemento dopo Infra
-                                    
-                                    # Filtra SSID vuoti e il nostro hotspot
-                                    if ssid and ssid != '*' and ssid != 'videoStreamer':
-                                        networks.append({
-                                            'ssid': ssid,
-                                            'bssid': bssid,
-                                            'signal': signal
-                                        })
+                                # Cerca il segnale: è un numero seguito da spazio (es. "75 " o "100 ")
+                                # Il segnale in nmcli è una percentuale 0-100
+                                signal_match = re.search(r'\s(\d{1,3})\s', rest_after_mode)
+                                signal = '0'
+                                if signal_match:
+                                    signal = signal_match.group(1)
+                                
+                                # Filtra SSID vuoti e il nostro hotspot
+                                if ssid and ssid != '*' and ssid != 'videoStreamer':
+                                    networks.append({
+                                        'ssid': ssid,
+                                        'bssid': bssid,
+                                        'signal': signal
+                                    })
                 except Exception as parse_err:
                     print(f"[WIFI] ⚠️  Errore parsing riga: {parse_err}")
                     pass

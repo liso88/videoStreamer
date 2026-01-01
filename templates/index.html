@@ -1464,16 +1464,20 @@
                         
                         let html = '';
                         data.networks.forEach(net => {
-                            const signal = parseInt(net.signal || 0);
-                            const signalBars = Math.min(4, Math.max(0, Math.round((signal + 100) / 25)));
-                            const bars = '📶'.repeat(signalBars) || '📡';
+                            // Il segnale da nmcli è una percentuale 0-100
+                            let signal = parseInt(net.signal, 10);
+                            if (isNaN(signal)) signal = 0;
+                            
+                            // Calcola le barre (0-4) basate sulla percentuale
+                            const signalBars = Math.min(4, Math.max(1, Math.round(signal / 25)));
+                            const bars = '📶'.repeat(signalBars);
                             
                             html += `
                                 <div style="padding: 10px; border-bottom: 1px solid #e0e7ff; cursor: pointer; border-radius: 4px; margin-bottom: 5px; background: #f8fafc; transition: background 0.2s;" 
                                      onmouseover="this.style.background='#e0f2fe'" 
                                      onmouseout="this.style.background='#f8fafc'"
                                      onclick="selectWiFiNetwork('${net.ssid.replace(/'/g, "\\'")}')">
-                                    <strong>${net.ssid}</strong> ${bars} ${signal}dBm
+                                    <strong>${net.ssid}</strong> ${bars} ${signal}%
                                 </div>
                             `;
                         });

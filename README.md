@@ -11,7 +11,6 @@ Trasforma il tuo Raspberry Pi Zero 2W in un convertitore **Video Analogico → C
 ## Caratteristiche Principali
 
 - **Dual Streaming**: MJPEG (HTTP) e RTSP (H.264) simultanei o indipendenti
-- **Interfaccia Web**: Dashboard moderna e responsive per gestione completa
 - **Multi-Source**: Supporto per dispositivi video USB e file video in loop
 - **Sicurezza**: Autenticazione integrata con gestione password
 - **Avvio Automatico**: Configurazione persistente con boot automatico
