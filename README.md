@@ -380,6 +380,11 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 
 ## Changelog
 
+### Version  v2.20251231 
+- Auto port 80
+- cleaned code stream
+- Improved Hotspot modality
+
 ### Version  v2.20251208 
 
 - Modalità Access Point
