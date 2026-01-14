@@ -260,7 +260,7 @@ Restart=on-failure
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=120
+TimeoutStartSec=90
 
 [Install]
 WantedBy=multi-user.target

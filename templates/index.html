@@ -677,6 +677,10 @@
                 <h3 style="margin-top: 0; color: #166534;">📊 Stato Attuale</h3>
                 <div style="display: grid;">
                     <div>
+                        <strong style="color: #065f46;">Nome Rete WiFi:</strong>
+                        <span id="current-network-display" style="color: #0f766e; font-weight: bold;">Caricamento...</span>
+                    </div>
+                    <div>
                         <strong style="color: #065f46;">IP Corrente:</strong>
                         <span id="current-ip-display" style="color: #0f766e; font-weight: bold;">Caricamento...</span>
                     </div>
@@ -1465,19 +1469,14 @@
                         let html = '';
                         data.networks.forEach(net => {
                             // Il segnale da nmcli è una percentuale 0-100
-                            let signal = parseInt(net.signal, 10);
-                            if (isNaN(signal)) signal = 0;
                             
                             // Calcola le barre (0-4) basate sulla percentuale
-                            const signalBars = Math.min(4, Math.max(1, Math.round(signal / 25)));
-                            const bars = '📶'.repeat(signalBars);
                             
                             html += `
                                 <div style="padding: 10px; border-bottom: 1px solid #e0e7ff; cursor: pointer; border-radius: 4px; margin-bottom: 5px; background: #f8fafc; transition: background 0.2s;" 
                                      onmouseover="this.style.background='#e0f2fe'" 
                                      onmouseout="this.style.background='#f8fafc'"
                                      onclick="selectWiFiNetwork('${net.ssid.replace(/'/g, "\\'")}')">
-                                    <strong>${net.ssid}</strong> ${bars} ${signal}%
                                 </div>
                             `;
                         });
@@ -1577,8 +1576,10 @@
                         const gateway = net.gateway || '192.168.1.1';
                         const dns = net.dns || '8.8.8.8';
                         const iface = net.interface || 'wlan0';
+                        const networkName = net.network_name || '--';
                         
                         // Aggiorna i display informativi
+                        document.getElementById('current-network-display').textContent = networkName;
                         document.getElementById('current-ip-display').textContent = currentIp;
                         document.getElementById('current-mode-display').textContent = mode === 'STATIC' ? 'IP Statico' : 'DHCP (Automatico)';
                         document.getElementById('current-gateway-display').textContent = gateway || '--';

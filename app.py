@@ -692,11 +692,56 @@ def get_network_info():
                         except:
                             pass
         
+        # Aggiungi il nome della rete WiFi connessa
+        config['network_name'] = get_connected_network_name()
+        
         return config
     except Exception as e:
         print(f"[NETWORK] ❌ Errore lettura configurazione rete: {e}")
         return {'error': str(e), 'current_ip': 'N/A', 'mode': 'DHCP', 'interface': 'wlan0', 'gateway': '--', 'dns': '--'}
 
+
+def get_connected_network_name():
+    """Ottiene il nome della rete WiFi connessa"""
+    try:
+        # Prova con iwconfig (metodo tradizionale)
+        result = subprocess.run(['iwconfig', 'wlan0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if 'ESSID:' in line:
+                    # Estrai ESSID tra virgolette: ESSID:"NomeRete"
+                    parts = line.split('ESSID:')
+                    if len(parts) > 1:
+                        essid = parts[1].strip().strip('"')
+                        if essid:
+                            return essid
+        
+        # Prova con iw (metodo più moderno)
+        result = subprocess.run(['iw', 'dev', 'wlan0', 'link'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if 'SSID:' in line:
+                    ssid = line.split('SSID:')[1].strip()
+                    if ssid:
+                        return ssid
+        
+        # Prova con nmcli (NetworkManager)
+        try:
+            result = subprocess.run(['nmcli', 'connection', 'show', '--active'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if 'connection.id' in line:
+                        network_name = line.split(':')[1].strip() if ':' in line else ''
+                        if network_name:
+                            return network_name
+        except:
+            pass
+        
+        # Se nessun metodo funziona
+        return '--'
+    except Exception as e:
+        print(f"[NETWORK] ⚠️  Errore lettura nome rete: {e}")
+        return '--'
 
 
 def _cidr_to_netmask(cidr):
@@ -1386,19 +1431,12 @@ def api_wifi_scan():
                                 ssid = rest[:mode_pos].strip()
                                 rest_after_mode = rest[mode_pos:]
                                 
-                                # Cerca il segnale: è un numero seguito da spazio (es. "75 " o "100 ")
-                                # Il segnale in nmcli è una percentuale 0-100
-                                signal_match = re.search(r'\s(\d{1,3})\s', rest_after_mode)
-                                signal = '0'
-                                if signal_match:
-                                    signal = signal_match.group(1)
                                 
                                 # Filtra SSID vuoti e il nostro hotspot
                                 if ssid and ssid != '*' and ssid != 'videoStreamer':
                                     networks.append({
                                         'ssid': ssid,
                                         'bssid': bssid,
-                                        'signal': signal
                                     })
                 except Exception as parse_err:
                     print(f"[WIFI] ⚠️  Errore parsing riga: {parse_err}")
@@ -1409,9 +1447,7 @@ def api_wifi_scan():
         for net in networks:
             ssid = net['ssid']
             try:
-                net_signal = int(net.get('signal', '0'))
-                existing_signal = int(unique_networks.get(ssid, {}).get('signal', '0'))
-                if ssid not in unique_networks or net_signal > existing_signal:
+                if ssid not in unique_networks:
                     unique_networks[ssid] = net
             except:
                 if ssid not in unique_networks:
