@@ -1468,15 +1468,14 @@
                         
                         let html = '';
                         data.networks.forEach(net => {
-                            // Il segnale da nmcli è una percentuale 0-100
-                            
-                            // Calcola le barre (0-4) basate sulla percentuale
-                            
                             html += `
                                 <div style="padding: 10px; border-bottom: 1px solid #e0e7ff; cursor: pointer; border-radius: 4px; margin-bottom: 5px; background: #f8fafc; transition: background 0.2s;" 
                                      onmouseover="this.style.background='#e0f2fe'" 
                                      onmouseout="this.style.background='#f8fafc'"
                                      onclick="selectWiFiNetwork('${net.ssid.replace(/'/g, "\\'")}')">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <strong style="color: #0c4a6e;">${net.ssid}</strong>
+                                    </div>
                                 </div>
                             `;
                         });
