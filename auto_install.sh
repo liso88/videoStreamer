@@ -187,7 +187,7 @@ NMEOF
     
     # Disabilita power management WiFi per evitare che l'hotspot sparisca
     sudo tee /etc/NetworkManager/conf.d/wifi-powersave.conf > /dev/null <<'PWEOF'
-[connection]
+[wifi]
 wifi.powersave = 2
 PWEOF
     echo "✓ Power save WiFi disabilitato"
@@ -251,17 +251,16 @@ sudo tee /etc/systemd/system/wifi-fallback.service > /dev/null <<EOF
 Description=WiFi Fallback to Hotspot
 After=network-online.target NetworkManager.service
 Wants=network-online.target
-After=multi-user.target
 
 [Service]
-Type=oneshot
+Type=simple
 User=root
 ExecStart=/usr/local/bin/wifi_fallback.sh
-RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
-TimeoutStartSec=90
-Restart=no
+TimeoutStartSec=120
 
 [Install]
 WantedBy=multi-user.target
