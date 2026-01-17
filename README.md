@@ -60,6 +60,11 @@ L'installazione richiede circa **10-15 minuti** e configura automaticamente:
 - Servizi systemd per avvio automatico
 
 
+#### 3.1 
+```bash
+crontab -e
+0 */6 * * * /home/tommaso/videoStreamer/restart_rtsp.sh
+```
 ### 4. Accedi all'Interfaccia Web
 
 Apri il browser e vai su:
@@ -379,6 +384,11 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 ---
 
 ## Changelog
+
+### Version  v2.20260117 
+
+- Improved Hotspot modality (solved some issues)
+- added restart rtsp
 
 ### Version  v2.20251231 
 - Auto port 80
