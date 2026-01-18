@@ -92,38 +92,11 @@ Questo permette di configurare la rete WiFi anche se il dispositivo non ha acces
 
 
 
-## Configurazioni Consigliate
-
-### Configurazione Leggera (Consigliata per Pi Zero 2W)
+## Check configurazione ffmpeg
 ```yaml
-MJPG Streamer:
-  Risoluzione: 640x480
-  Framerate: 15 fps
-  Qualità: 85
-  Avvio automatico: ✓
-  
-RTSP: Disattivato
+ps -fA | grep ffmpeg
 ```
 
-### Configurazione Qualità
-```yaml
-RTSP Stream:
-  Risoluzione: 640x480
-  Framerate: 25 fps
-  Bitrate: 1 Mbps
-  Avvio automatico: ✓
-  
-MJPG: Disattivato
-```
-
-### Configurazione Video Loop
-```yaml
-Sorgente: File Video
-Video: demo.mp4 (in ~/stream_manager/videos/)
-Loop: Attivo
-Risoluzione: 640x480
-Framerate: 25 fps
-```
 
 
 ### Da Terminale
