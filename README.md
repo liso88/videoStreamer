@@ -358,6 +358,10 @@ Questo progetto è rilasciato sotto licenza MIT - vedi il file [LICENSE](LICENSE
 
 ## Changelog
 
+### Version  v2.20260203 
+
+- Fix static IP
+
 ### Version  v2.20260117 
 
 - Improved Hotspot modality (solved some issues)

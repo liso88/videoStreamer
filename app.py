@@ -780,6 +780,27 @@ def set_static_ip(interface, ip_address, netmask, gateway, dns):
         
         netmask_decimal = _cidr_to_netmask(int(netmask))
         
+        # Verifica se NetworkManager è attivo e lo disabilita per questa interfaccia
+        try:
+            result = subprocess.run(['sudo', 'systemctl', 'is-active', 'NetworkManager'], 
+                                  capture_output=True, text=True, timeout=3)
+            if result.returncode == 0:
+                print(f"[NETWORK] ⚠️  NetworkManager attivo - lo disabilito per {interface}...")
+                # Crea file per escludere l'interfaccia da NetworkManager
+                nm_conf = f"""[keyfile]
+unmanaged-devices=interface-name:{interface}"""
+                with open('/tmp/NetworkManager.conf', 'w') as f:
+                    f.write(nm_conf)
+                subprocess.run(['sudo', 'mkdir', '-p', '/etc/NetworkManager/conf.d'], capture_output=True)
+                subprocess.run(['sudo', 'cp', '/tmp/NetworkManager.conf', 
+                              f'/etc/NetworkManager/conf.d/99-unmanage-{interface}.conf'], 
+                              check=True, capture_output=True)
+                subprocess.run(['sudo', 'systemctl', 'restart', 'NetworkManager'], 
+                              capture_output=True, timeout=10)
+                print(f"[NETWORK] ✅ NetworkManager configurato per ignorare {interface}")
+        except:
+            pass
+        
         # Verifica quale backend di rete è in uso
         dhcpcd_active = False
         networkd_active = False
@@ -940,19 +961,113 @@ Gateway={gateway}
                 print(f"[NETWORK] ❌ Errore configurazione dhcpcd: {e}")
                 raise
         
-        # Riavvia l'interfaccia di rete per applicare i cambiamenti
-        print(f"[NETWORK] 🔄 Riavvio interfaccia {interface}...")
-        try:
-            subprocess.run(['sudo', 'ip', 'link', 'set', interface, 'down'], 
-                          capture_output=True, timeout=5)
-            time.sleep(2)
-            subprocess.run(['sudo', 'ip', 'link', 'set', interface, 'up'], 
-                          capture_output=True, timeout=5)
-            print(f"[NETWORK] ✅ Interfaccia {interface} riavviata")
-        except Exception as e:
-            print(f"[NETWORK] ⚠️  Errore riavvio interfaccia: {e}")
+        # Forza il rilascio del lease DHCP e riavvia l'interfaccia
+        print(f"[NETWORK] 🔄 Applicazione configurazione IP statico su {interface}...")
         
-        print(f"[NETWORK] ℹ️  IP statico configurato: {ip_address}/{netmask}, Gateway: {gateway}")
+        # 1. Ferma tutti i servizi che potrebbero gestire l'interfaccia
+        print(f"[NETWORK] 🛑 Fermo servizi di rete...")
+        if dhcpcd_active:
+            subprocess.run(['sudo', 'systemctl', 'stop', 'dhcpcd'], 
+                          capture_output=True, timeout=5)
+        if networkd_active:
+            subprocess.run(['sudo', 'systemctl', 'stop', 'systemd-networkd'], 
+                          capture_output=True, timeout=5)
+        # Ferma wpa_supplicant temporaneamente per WiFi
+        if interface.startswith('wl'):
+            subprocess.run(['sudo', 'systemctl', 'stop', 'wpa_supplicant'], 
+                          capture_output=True, timeout=5)
+        time.sleep(1)
+        
+        # 2. Pulisci completamente l'interfaccia
+        print(f"[NETWORK] 🧹 Pulizia interfaccia {interface}...")
+        # Flush indirizzi IP
+        result = subprocess.run(['sudo', 'ip', 'addr', 'flush', 'dev', interface], 
+                      capture_output=True, timeout=5)
+        print(f"[NETWORK]    IP flush: {result.returncode == 0}")
+        
+        # Rimuovi route default
+        subprocess.run(['sudo', 'ip', 'route', 'del', 'default'], 
+                      capture_output=True, timeout=5)
+        
+        # Rimuovi tutte le route per questa interfaccia
+        result = subprocess.run(['ip', 'route', 'show', 'dev', interface], 
+                      capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout:
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                    dest = line.split()[0]
+                    subprocess.run(['sudo', 'ip', 'route', 'del', dest, 'dev', interface], 
+                                  capture_output=True, timeout=5)
+        
+        # 3. Down/Up interfaccia
+        print(f"[NETWORK] 🔄 Reset interfaccia {interface}...")
+        subprocess.run(['sudo', 'ip', 'link', 'set', interface, 'down'], 
+                      capture_output=True, timeout=5)
+        time.sleep(2)
+        subprocess.run(['sudo', 'ip', 'link', 'set', interface, 'up'], 
+                      capture_output=True, timeout=5)
+        time.sleep(3)
+        
+        # 4. Applica IP statico manualmente
+        print(f"[NETWORK] 📌 Applico IP statico: {ip_address}/{netmask}...")
+        result = subprocess.run(['sudo', 'ip', 'addr', 'add', f'{ip_address}/{netmask}', 'dev', interface], 
+                      capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            print(f"[NETWORK]    ✅ IP assegnato")
+        else:
+            print(f"[NETWORK]    ⚠️  Errore assegnazione IP: {result.stderr}")
+        
+        # 5. Aggiungi route default
+        print(f"[NETWORK] 🛣️  Aggiungo gateway: {gateway}...")
+        result = subprocess.run(['sudo', 'ip', 'route', 'add', 'default', 'via', gateway, 'dev', interface], 
+                      capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            print(f"[NETWORK]    ✅ Gateway configurato")
+        else:
+            print(f"[NETWORK]    ⚠️  Errore gateway: {result.stderr}")
+        
+        # 6. Configura DNS
+        print(f"[NETWORK] 🌐 Configuro DNS: {dns}...")
+        dns_content = ""
+        for dns_server in dns.split(','):
+            dns_content += f"nameserver {dns_server.strip()}\n"
+        
+        with open('/tmp/resolv.conf.new', 'w') as f:
+            f.write(dns_content)
+        subprocess.run(['sudo', 'cp', '/tmp/resolv.conf.new', '/etc/resolv.conf'], 
+                      capture_output=True, timeout=5)
+        print(f"[NETWORK]    ✅ DNS configurato")
+        
+        # 7. Riavvia wpa_supplicant se era WiFi
+        if interface.startswith('wl'):
+            print(f"[NETWORK] 📡 Riavvio wpa_supplicant...")
+            subprocess.run(['sudo', 'systemctl', 'start', 'wpa_supplicant'], 
+                          capture_output=True, timeout=10)
+            time.sleep(3)
+        
+        # 8. Riavvia i servizi di rete
+        print(f"[NETWORK] 🔄 Riavvio servizi di rete...")
+        if dhcpcd_active:
+            subprocess.run(['sudo', 'systemctl', 'start', 'dhcpcd'], 
+                          capture_output=True, timeout=10)
+            print(f"[NETWORK]    ✅ dhcpcd riavviato")
+        if networkd_active:
+            subprocess.run(['sudo', 'systemctl', 'start', 'systemd-networkd'], 
+                          capture_output=True, timeout=10)
+            print(f"[NETWORK]    ✅ systemd-networkd riavviato")
+        
+        time.sleep(3)
+        
+        # 9. Verifica IP applicato
+        result = subprocess.run(['ip', 'addr', 'show', interface], 
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and ip_address in result.stdout:
+            print(f"[NETWORK] ✅ SUCCESSO: IP statico {ip_address} applicato e attivo!")
+        else:
+            print(f"[NETWORK] ⚠️  ATTENZIONE: IP potrebbe non essere applicato correttamente")
+            print(f"[NETWORK]    Output ip addr: {result.stdout}")
+        
+        print(f"[NETWORK] ℹ️  Configurazione completata: {ip_address}/{netmask}, Gateway: {gateway}")
         return True
     except Exception as e:
         print(f"[NETWORK] ❌ Errore configurazione IP statico: {e}")
